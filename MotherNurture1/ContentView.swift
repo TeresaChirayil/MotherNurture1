@@ -7,11 +7,13 @@
 
 import SwiftUI
 
+
 struct ContentView: View {
     @State private var email: String = ""
     @State private var password: String = ""
     @State private var navigateToChannels = false
     
+
     var body: some View {
         NavigationStack {
             ZStack {
