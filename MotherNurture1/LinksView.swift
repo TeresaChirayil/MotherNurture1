@@ -65,11 +65,14 @@ struct LinksView: View {
                             .padding(40)
                         }
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .frame(maxWidth: .infinity)
                     .padding(.horizontal, 20)
-                    .padding(.bottom, 10)
+                    .padding(.top, 20)
+                    .padding(.bottom, 20)
                     
-                    // Action Buttons
+                    Spacer()
+                    
+                    // Action Buttons - Positioned lower
                     HStack(spacing: 40) {
                         Button(action: swipeLeft) {
                             ZStack {
@@ -83,6 +86,7 @@ struct LinksView: View {
                                     .font(.system(size: 24, weight: .bold))
                             }
                         }
+                        .buttonStyle(PlainButtonStyle())
                         
                         Button(action: swipeRight) {
                             ZStack {
@@ -95,12 +99,9 @@ struct LinksView: View {
                                     .font(.system(size: 24))
                             }
                         }
+                        .buttonStyle(PlainButtonStyle())
                     }
-                    .padding(.vertical, 25)
-                    
-                    // Space so nav bar doesn’t overlap
-                    Spacer(minLength: 0)
-                        .frame(height: 80)
+                    .padding(.bottom, 100)
                 }
                 // Bottom Nav Bar (lowered)
                 .overlay(alignment: .bottom) {
