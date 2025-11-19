@@ -9,9 +9,11 @@ import SwiftUI
 
 
 struct ContentView: View {
+    @EnvironmentObject var userDataManager: UserDataManager
     @State private var email: String = ""
     @State private var password: String = ""
     @State private var navigateToChannels = false
+    @State private var navigateToSignUp = false
     
 
     var body: some View {
@@ -23,17 +25,20 @@ struct ContentView: View {
                 
                 VStack(spacing: 30) {
                     Spacer()
-                        .frame(height: 80)
+                        .frame(height: 40)
+                    
+                    // Logo
+                    Image("myLogo")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 180, height: 200)
+                        
                     
                     // App Title
                     Text("MotherNurtue")
                         .font(.system(size: 32, weight: .bold, design: .rounded))
                         .foregroundColor(Color(hex: "5C3D2E"))
                     
-                    // Log In Heading
-                    Text("Log In")
-                        .font(.system(size: 24, weight: .bold, design: .rounded))
-                        .foregroundColor(Color(hex: "5C3D2E"))
                     
                     // Input Fields
                     VStack(spacing: 15) {
@@ -45,13 +50,10 @@ struct ContentView: View {
                     }
                     .padding(.horizontal, 40)
                     
-                    Spacer()
-                        .frame(height: 40)
-                    
                     // New User link and Sign Up button
                     VStack(alignment: .center, spacing: 10) {
                         Button(action: {
-                            // Handle new user action
+                            navigateToSignUp = true
                         }) {
                             Text("New User?")
                                 .font(.system(size: 14, design: .rounded))
@@ -60,10 +62,20 @@ struct ContentView: View {
                         }
                         
                         Button(action: {
+                            // Load user profile from Firebase if email exists
+                            if !email.isEmpty {
+                                Task {
+                                    do {
+                                        try await userDataManager.loadProfileFromFirebase(email: email)
+                                    } catch {
+                                        print("Error loading profile: \(error)")
+                                    }
+                                }
+                            }
                             navigateToChannels = true
                         }) {
-                            Text("Sign Up")
-                                .font(.system(size: 16, weight: .medium, design: .rounded))
+                            Text("Log in")
+                                .font(.system(size: 20, weight: .medium, design: .rounded))
                                 .foregroundColor(Color(hex: "5C3D2E"))
                                 .frame(width: 100, height: 44)
                                 .background(Color(hex: "9BA897"))
@@ -75,6 +87,10 @@ struct ContentView: View {
             }
             .navigationDestination(isPresented: $navigateToChannels) {
                 ChannelsView()
+            }
+            .navigationDestination(isPresented: $navigateToSignUp) {
+                TutorialView()
+                    .environmentObject(userDataManager)
             }
             .toolbar(.hidden, for: .navigationBar)
         }
@@ -123,4 +139,5 @@ extension Color {
 
 #Preview {
     ContentView()
+        .environmentObject(UserDataManager.shared)
 }

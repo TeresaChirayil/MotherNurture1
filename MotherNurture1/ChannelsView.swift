@@ -6,10 +6,11 @@ struct ChannelsView: View {
     @State private var currentTab: TabDestination = .channels
     @State private var selectedChannel: Channel? = nil  // ← for navigation
     @State private var channels: [Channel] = [
-        Channel(name: "Single moms", timeAgo: "2h"),
-        Channel(name: "Moms with infants", timeAgo: "4h"),
-        Channel(name: "Moms of children with autism", timeAgo: "6h"),
-        Channel(name: "Kids with disabilities", timeAgo: "8h")
+        Channel(name: "Candence Smith", timeAgo: "1h", isDirectMessage: true),
+        Channel(name: "Get to Know Each Other!", timeAgo: "2h"),
+        Channel(name: "Mothers of Children with Disabilities", timeAgo: "4h"),
+        Channel(name: "Expecting Moms", timeAgo: "6h"),
+        Channel(name: "Single Moms", timeAgo: "8h")
     ]
     
     var body: some View {
@@ -56,10 +57,10 @@ struct ChannelsView: View {
                                         HStack(spacing: 12) {
                                             ZStack {
                                                 RoundedRectangle(cornerRadius: 8)
-                                                    .fill(Color(hex: "8B9A7E"))
+                                                    .fill(channel.isDirectMessage ? Color(hex: "9BA897") : Color(hex: "8B9A7E"))
                                                     .frame(width: 44, height: 44)
                                                 
-                                                Image(systemName: "bubble.left.and.bubble.right")
+                                                Image(systemName: channel.isDirectMessage ? "bubble.left" : "bubble.left.and.bubble.right")
                                                     .foregroundColor(Color(hex: "5C3D2E"))
                                                     .font(.system(size: 20))
                                             }
@@ -114,7 +115,7 @@ struct ChannelsView: View {
                 CreateChannelView(
                     isPresented: $showCreateChannel,
                     onSave: { channelName, description, category, type in
-                        let newChannel = Channel(name: channelName, timeAgo: "0h")
+                        let newChannel = Channel(name: channelName, timeAgo: "0h", isDirectMessage: false)
                         channels.append(newChannel)
                     }
                 )
@@ -131,6 +132,13 @@ struct Channel: Identifiable, Hashable {
     let id = UUID()
     let name: String
     let timeAgo: String
+    let isDirectMessage: Bool
+    
+    init(name: String, timeAgo: String, isDirectMessage: Bool = false) {
+        self.name = name
+        self.timeAgo = timeAgo
+        self.isDirectMessage = isDirectMessage
+    }
 }
 
 #Preview {

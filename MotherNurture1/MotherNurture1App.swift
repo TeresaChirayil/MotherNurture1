@@ -6,12 +6,22 @@
 //
 
 import SwiftUI
+import FirebaseCore
 
 @main
 struct MotherNurture1App: App {
+    @StateObject private var userDataManager = UserDataManager.shared
+    
+    init() {
+        FirebaseApp.configure()
+    }
+    
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            NavigationView {
+                ContentView()
+                    .environmentObject(userDataManager)
+            }
         }
     }
 }
