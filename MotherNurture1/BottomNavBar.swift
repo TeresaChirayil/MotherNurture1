@@ -43,7 +43,7 @@ struct BottomNavBar: View {
             Spacer()
             
             // 📖 Forum
-            NavigationLink(destination: ForumView()) {
+            NavigationLink(destination: CommunityFeedView().environmentObject(UserDataManager.shared)) {
                 Image(systemName: "book")
                     .font(.system(size: 24))
                     .foregroundColor(currentTab == .forum ? Color(hex: "8B9A7E") : Color(hex: "5C3D2E"))
