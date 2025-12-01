@@ -227,4 +227,3 @@ struct EncouragingCardView: View {
 #Preview {
     ForumView()
 }
-

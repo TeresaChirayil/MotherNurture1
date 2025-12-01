@@ -35,7 +35,7 @@ struct ContentView: View {
                         
                     
                     // App Title
-                    Text("MotherNurtue")
+                    Text("MotherNurture")
                         .font(.system(size: 32, weight: .bold, design: .rounded))
                         .foregroundColor(Color(hex: "5C3D2E"))
                     

@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import FirebaseCore
 
 struct PostDetailView: View {
     @EnvironmentObject var userDataManager: UserDataManager
@@ -295,4 +296,3 @@ struct CommentRowView: View {
     ))
     .environmentObject(UserDataManager.shared)
 }
-

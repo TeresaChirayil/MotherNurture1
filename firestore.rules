@@ -1,0 +1,36 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Users collection - allow read/write for all authenticated users
+    // For development: allow read/write for everyone
+    // For production: restrict based on authentication
+    match /users/{userId} {
+      allow read, write: if true; // Change to: if request.auth != null; for production
+    }
+    
+    // Channels collection and subcollections
+    match /channels/{channelId} {
+      // Allow reading channel documents
+      allow read: if true; // Change to: if request.auth != null; for production
+      
+      // Allow writing channel documents
+      allow write: if true; // Change to: if request.auth != null; for production
+      
+      // Members subcollection within each channel
+      match /members/{memberId} {
+        // Allow reading members
+        allow read: if true; // Change to: if request.auth != null; for production
+        
+        // Allow writing to members (adding users to channels)
+        allow read, write: if true; // Change to: if request.auth != null; for production
+      }
+    }
+    
+    // Default deny rule for any other collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+

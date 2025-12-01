@@ -131,4 +131,3 @@ struct CreatePostView: View {
     CreatePostView(onPostCreated: {})
         .environmentObject(UserDataManager.shared)
 }
-
