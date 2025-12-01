@@ -22,6 +22,8 @@ struct MapView: View {
     @State private var selectedCategory: LocationPin.LocationCategory? = nil
     @State private var showFilters = false
     @State private var showListSheet = false
+    @State private var showFavoritesOnly = false
+    @State private var favoriteIDs: Set<UUID> = []
     @StateObject private var locationManager = LocationManager()
     
     // Real family-friendly locations in the 60659 area (West Ridge, Chicago)
@@ -286,6 +288,11 @@ struct MapView: View {
             locations = locations.filter { $0.category == category }
         }
         
+        // Filter by favorites
+        if showFavoritesOnly {
+            locations = locations.filter { favoriteIDs.contains($0.id) }
+        }
+        
         return locations
     }
     
@@ -372,12 +379,9 @@ struct MapView: View {
                         ) { location in
                             MapAnnotation(coordinate: jitteredCoordinate(for: location)) {
                                 Button {
-                                    if selectedLocation?.id == location.id {
-                                        // second tap opens detail
-                                        showLocationDetail = true
-                                    } else {
-                                        selectedLocation = location
-                                    }
+                                    // Single-tap: select and present details immediately
+                                    selectedLocation = location
+                                    showLocationDetail = true
                                 } label: {
                                     VStack(spacing: 4) {
                                         // Larger hit target
@@ -389,6 +393,17 @@ struct MapView: View {
                                             Image(systemName: location.category.icon)
                                                 .font(.system(size: selectedLocation?.id == location.id ? 22 : 18))
                                                 .foregroundColor(location.category.color)
+                                                .overlay(
+                                                    // Tiny heart overlay if favorited
+                                                    Group {
+                                                        if favoriteIDs.contains(location.id) {
+                                                            Image(systemName: "heart.fill")
+                                                                .foregroundColor(.red)
+                                                                .font(.system(size: 10, weight: .bold))
+                                                                .offset(x: 12, y: -12)
+                                                        }
+                                                    }
+                                                )
                                         }
                                         .offset(y: -6)
                                         
@@ -426,6 +441,36 @@ struct MapView: View {
                                         .font(.system(size: 14, weight: .semibold, design: .rounded))
                                 }
                                 .foregroundColor(Color(hex: "5C3D2E"))
+                                .frame(height: 36)
+                                .padding(.horizontal, 12)
+                                .background(Color.white)
+                                .cornerRadius(10)
+                                .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
+                            }
+                            
+                            // Favorites-only Toggle
+                            Button {
+                                withAnimation {
+                                    showFavoritesOnly.toggle()
+                                }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: showFavoritesOnly ? "heart.circle.fill" : "heart.circle")
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundColor(showFavoritesOnly ? .red : Color(hex: "5C3D2E"))
+                                    Text("Favorites")
+                                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                        .foregroundColor(Color(hex: "5C3D2E"))
+                                    if !favoriteIDs.isEmpty {
+                                        Text("\(favoriteIDs.count)")
+                                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .background(Color.red)
+                                            .cornerRadius(8)
+                                    }
+                                }
                                 .frame(height: 36)
                                 .padding(.horizontal, 12)
                                 .background(Color.white)
@@ -474,9 +519,10 @@ struct MapView: View {
                     }
                     
                     // Results Count
-                    if !searchText.isEmpty || selectedCategory != nil {
+                    if !searchText.isEmpty || selectedCategory != nil || showFavoritesOnly {
                         HStack {
-                            Text("\(filteredLocations.count) location\(filteredLocations.count == 1 ? "" : "s") found")
+                            let count = filteredLocations.count
+                            Text("\(count) location\(count == 1 ? "" : "s") found")
                                 .font(.system(size: 14, design: .rounded))
                                 .foregroundColor(Color(hex: "5C3D2E").opacity(0.7))
                             Spacer()
@@ -513,16 +559,18 @@ struct MapView: View {
             }
             .sheet(isPresented: $showLocationDetail) {
                 if let location = selectedLocation {
-                    LocationDetailSheet(location: location)
+                    LocationDetailSheet(location: location, favoriteIDs: $favoriteIDs)
                 }
             }
             .sheet(isPresented: $showListSheet) {
                 LocationListSheet(
                     locations: filteredLocations,
+                    favoriteIDs: $favoriteIDs,
                     onSelect: { loc in
                         selectedLocation = loc
                         region.center = loc.coordinate
                         showListSheet = false
+                        showLocationDetail = true
                     }
                 )
             }
@@ -665,8 +713,13 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
 // MARK: - Location Detail Sheet
 struct LocationDetailSheet: View {
     let location: LocationPin
+    @Binding var favoriteIDs: Set<UUID>
     @Environment(\.dismiss) var dismiss
     @State private var showShareSheet = false
+    
+    private var isFavorited: Bool {
+        favoriteIDs.contains(location.id)
+    }
     
     var body: some View {
         NavigationStack {
@@ -689,6 +742,18 @@ struct LocationDetailSheet: View {
                                 .font(.system(size: 14, design: .rounded))
                                 .foregroundColor(Color(hex: "8B9A7E"))
                         }
+                        Spacer()
+                        // Favorite toggle in header
+                        Button(action: toggleFavorite) {
+                            Image(systemName: isFavorited ? "heart.fill" : "heart")
+                                .font(.system(size: 24))
+                                .foregroundColor(isFavorited ? .red : Color(hex: "5C3D2E"))
+                                .padding(8)
+                                .background(Color.white)
+                                .cornerRadius(10)
+                                .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+                        }
+                        .accessibilityLabel(isFavorited ? "Unfavorite" : "Favorite")
                     }
                     .padding(.top, 10)
                     
@@ -832,6 +897,14 @@ struct LocationDetailSheet: View {
         return text
     }
     
+    private func toggleFavorite() {
+        if favoriteIDs.contains(location.id) {
+            favoriteIDs.remove(location.id)
+        } else {
+            favoriteIDs.insert(location.id)
+        }
+    }
+    
     private func openInMaps() {
         let mapItem = MKMapItem(placemark: MKPlacemark(coordinate: location.coordinate))
         mapItem.name = location.name
@@ -858,6 +931,7 @@ struct ShareSheet: UIViewControllerRepresentable {
 // MARK: - List Sheet for crowded areas
 private struct LocationListSheet: View {
     let locations: [LocationPin]
+    @Binding var favoriteIDs: Set<UUID>
     var onSelect: (LocationPin) -> Void
     
     @Environment(\.dismiss) private var dismiss
@@ -865,26 +939,40 @@ private struct LocationListSheet: View {
     var body: some View {
         NavigationStack {
             List(locations, id: \.id) { loc in
-                Button {
-                    onSelect(loc)
-                    dismiss()
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: loc.category.icon)
-                            .foregroundColor(loc.category.color)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(loc.name)
-                                .font(.system(size: 16, weight: .semibold, design: .rounded))
-                                .foregroundColor(Color(hex: "5C3D2E"))
-                            Text(loc.address)
-                                .font(.system(size: 12, design: .rounded))
-                                .foregroundColor(Color(hex: "5C3D2E").opacity(0.7))
-                                .lineLimit(2)
+                HStack(spacing: 12) {
+                    Button {
+                        onSelect(loc)
+                        dismiss()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: loc.category.icon)
+                                .foregroundColor(loc.category.color)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(loc.name)
+                                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                    .foregroundColor(Color(hex: "5C3D2E"))
+                                Text(loc.address)
+                                    .font(.system(size: 12, design: .rounded))
+                                    .foregroundColor(Color(hex: "5C3D2E").opacity(0.7))
+                                    .lineLimit(2)
+                            }
+                            Spacer()
                         }
-                        Spacer()
                     }
+                    .buttonStyle(.plain)
+                    
+                    Button {
+                        if favoriteIDs.contains(loc.id) {
+                            favoriteIDs.remove(loc.id)
+                        } else {
+                            favoriteIDs.insert(loc.id)
+                        }
+                    } label: {
+                        Image(systemName: favoriteIDs.contains(loc.id) ? "heart.fill" : "heart")
+                            .foregroundColor(favoriteIDs.contains(loc.id) ? .red : Color(hex: "5C3D2E"))
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
             .navigationTitle("Locations")
             .toolbar {
@@ -899,3 +987,4 @@ private struct LocationListSheet: View {
 #Preview {
     MapView()
 }
+
