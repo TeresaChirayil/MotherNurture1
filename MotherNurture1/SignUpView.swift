@@ -14,7 +14,6 @@ struct SignUpView: View {
     @State private var lastName: String = ""
     @State private var dateOfBirth: Date = Date()
     @State private var email: String = ""
-    @State private var phoneNumber: String = ""
     @State private var showDatePicker: Bool = false
     @State private var navigateToWelcome = false
     
@@ -117,11 +116,6 @@ struct SignUpView: View {
                             .textFieldStyle(SignUpTextFieldStyle())
                             .keyboardType(.emailAddress)
                             .autocapitalization(.none)
-                        
-                        // Phone Number Field
-                        TextField("Phone Number", text: $phoneNumber)
-                            .textFieldStyle(SignUpTextFieldStyle())
-                            .keyboardType(.phonePad)
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 10)
@@ -135,7 +129,6 @@ struct SignUpView: View {
                     userDataManager.profile.lastName = lastName.isEmpty ? nil : lastName
                     userDataManager.profile.dateOfBirth = dateOfBirth
                     userDataManager.profile.email = email.isEmpty ? nil : email
-                    userDataManager.profile.phoneNumber = phoneNumber.isEmpty ? nil : phoneNumber
                     
                     navigateToWelcome = true
                 }) {
@@ -184,4 +177,3 @@ struct SignUpTextFieldStyle: TextFieldStyle {
             .environmentObject(UserDataManager.shared)
     }
 }
-
