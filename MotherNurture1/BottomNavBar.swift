@@ -34,7 +34,7 @@ struct BottomNavBar: View {
             Spacer()
             
             // 🔗 Links
-            NavigationLink(destination: LinksView()) {
+            NavigationLink(destination: MatchmakingView()) {
                 Image(systemName: "link")
                     .font(.system(size: 24))
                     .foregroundColor(currentTab == .links ? Color(hex: "8B9A7E") : Color(hex: "5C3D2E"))
