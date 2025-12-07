@@ -1,17 +1,14 @@
 import SwiftUI
 
 struct ChannelsView: View {
+    @ObservedObject private var channelsManager = ChannelsManager.shared
     @State private var searchText: String = ""
     @State private var showCreateChannel = false
-    @State private var currentTab: TabDestination = .channels
     @State private var selectedChannel: Channel? = nil  // ← for navigation
-    @State private var channels: [Channel] = [
-        Channel(name: "Candence Smith", timeAgo: "1h", isDirectMessage: true),
-        Channel(name: "Get to Know Each Other!", timeAgo: "2h"),
-        Channel(name: "Mothers of Children with Disabilities", timeAgo: "4h"),
-        Channel(name: "Expecting Moms", timeAgo: "6h"),
-        Channel(name: "Single Moms", timeAgo: "8h")
-    ]
+    
+    private var channels: [Channel] {
+        channelsManager.channels
+    }
     
     var body: some View {
         NavigationStack {
@@ -104,11 +101,6 @@ struct ChannelsView: View {
                     }
                     .padding(.bottom, 110)
                 }
-                // ✅ Keep bottom nav visible always
-                .overlay(alignment: .bottom) {
-                    BottomNavBar(currentTab: $currentTab)
-                        .padding(.bottom, 5)
-                }
             }
             // ✅ Navigation to CreateChannelView
             .navigationDestination(isPresented: $showCreateChannel) {
@@ -116,7 +108,7 @@ struct ChannelsView: View {
                     isPresented: $showCreateChannel,
                     onSave: { channelName, description, category, type in
                         let newChannel = Channel(name: channelName, timeAgo: "0h", isDirectMessage: false)
-                        channels.append(newChannel)
+                        channelsManager.addChannel(newChannel)
                     }
                 )
             }

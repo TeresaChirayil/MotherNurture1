@@ -267,7 +267,7 @@ extension Color {
 
 // - b-- 1. Data Model (Profile) ---
 public struct Profile: Identifiable, Equatable {
-    public let id = UUID()
+    public let id: String // Use userID for stable identification
     let name: String
     let age: Int
     let location: String
@@ -275,11 +275,23 @@ public struct Profile: Identifiable, Equatable {
     let bio: String
     let tags: [String]
     let groups: [String]
+    
+    init(id: String = UUID().uuidString, name: String, age: Int, location: String, profilePicFileName: String, bio: String, tags: [String], groups: [String]) {
+        self.id = id
+        self.name = name
+        self.age = age
+        self.location = location
+        self.profilePicFileName = profilePicFileName
+        self.bio = bio
+        self.tags = tags
+        self.groups = groups
+    }
 }
 
-// --- 2. Mock Data ---
+// --- 2. Mock Data (fallback when no real profiles available) ---
 let mockProfiles: [Profile] = [
     Profile(
+        id: "mock_jessica",
         name: "Jessica R. ",
         age: 29,
         location: "1.2 mi away",
@@ -289,6 +301,7 @@ let mockProfiles: [Profile] = [
         groups: ["Get to Know Eachother!", "New Mom", "Mother of Children w/ Disabilities"]
     ),
     Profile(
+        id: "mock_chloe",
         name: "Chloe D. ",
         age: 25,
         location: "0.5 mi away",
@@ -298,6 +311,7 @@ let mockProfiles: [Profile] = [
         groups: ["Get to Know Eachother!", "Expecting Moms"]
     ),
     Profile(
+        id: "mock_sarah",
         name: "Sarah B. ",
         age: 23,
         location: "5 mi away",
@@ -307,6 +321,7 @@ let mockProfiles: [Profile] = [
         groups: ["Get to Know Eachother!", "New Moms"]
     ),
     Profile(
+        id: "mock_emily",
         name: "Emily P. ",
         age: 35,
         location: "7 mi away",
@@ -316,6 +331,7 @@ let mockProfiles: [Profile] = [
         groups: ["Get to Know Eachother!", "Single Moms"]
     ),
     Profile(
+        id: "mock_maria",
         name: "Maria C. ",
         age: 38,
         location: "8 mi away",
@@ -422,7 +438,9 @@ struct CardView: View {
 
 // --- 5. Main Matchmaking View with Swiping Logic ---
 struct MatchmakingView: View {
-    @State private var profiles: [Profile] = mockProfiles
+    @EnvironmentObject var userDataManager: UserDataManager
+    @State private var profiles: [Profile] = []
+    @State private var isLoading: Bool = true
     @State private var offset: CGSize = .zero
     @State private var lastOffset: CGSize = .zero
     @State private var feedbackText: String? = nil
@@ -430,6 +448,8 @@ struct MatchmakingView: View {
     @State private var matchedProfile: Profile? = nil
     @State private var navigateToMessages: Bool = false
     @State private var groupToNavigateTo: Channel? = nil
+    @State private var showError: Bool = false
+    @State private var errorMessage: String = ""
     
     private let swipeThreshold: CGFloat = 100
     private let rotationAngle: Double = 5.0
@@ -464,10 +484,10 @@ struct MatchmakingView: View {
                 }
             }
             
-            // Loop mock data back if nearly empty
+            // Reload from Firebase if nearly empty
             if profiles.count <= 1 {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 6.0) {
-                    profiles = mockProfiles
+                Task {
+                    await loadProfiles()
                 }
             }
         }
@@ -486,6 +506,11 @@ struct MatchmakingView: View {
                     .font(.system(size: 30, weight: .bold, design: .rounded))
                     .foregroundColor(.primaryText)
                     .padding(.top, 20)
+                
+                if isLoading {
+                    ProgressView()
+                        .padding()
+                }
                 
                 if let feedback = feedbackText {
                     Text(feedback)
@@ -539,14 +564,42 @@ struct MatchmakingView: View {
                                             }
                                         }
                                 )
+                        } else if isLoading {
+                            VStack {
+                                ProgressView()
+                                    .scaleEffect(1.5)
+                                Text("Loading profiles...")
+                                    .foregroundColor(.gray)
+                                    .padding(.top, 8)
+                            }
+                            .frame(height: maxHeight)
+                            .frame(maxWidth: .infinity)
                         } else {
                             VStack {
                                 Image(systemName: "magnifyingglass")
                                     .font(.system(size: 40))
                                     .foregroundColor(.gray)
-                                Text("Searching for more connections...")
+                                Text("No more profiles available")
                                     .foregroundColor(.gray)
                                     .padding(.top, 8)
+                                Text("Check back later for new connections")
+                                    .font(.caption)
+                                    .foregroundColor(.gray.opacity(0.7))
+                                    .padding(.top, 4)
+                                
+                                Button(action: {
+                                    Task {
+                                        await loadProfiles()
+                                    }
+                                }) {
+                                    Text("Refresh")
+                                        .font(.headline)
+                                        .foregroundColor(.white)
+                                        .padding()
+                                        .background(Color.connectGreen)
+                                        .cornerRadius(12)
+                                        .padding(.top, 16)
+                                }
                             }
                             .frame(height: maxHeight)
                             .frame(maxWidth: .infinity)
@@ -612,6 +665,15 @@ struct MatchmakingView: View {
                             
                             HStack(spacing: 20) {
                                 Button(action: {
+                                    // Add the matched person to ChannelsView before navigating
+                                    if let profile = matchedProfile {
+                                        let newChannel = Channel(
+                                            name: profile.name.trimmingCharacters(in: .whitespaces),
+                                            timeAgo: "now",
+                                            isDirectMessage: true
+                                        )
+                                        ChannelsManager.shared.addChannel(newChannel)
+                                    }
                                     navigateToMessages = true
                                     showMatchPopup = false
                                 }) {
@@ -651,7 +713,9 @@ struct MatchmakingView: View {
             // Navigate to the app-wide MessagesView by constructing a DM Channel for the matched profile
             .navigationDestination(isPresented: $navigateToMessages) {
                 if let profile = matchedProfile {
-                    MessagesView(channel: Channel(name: profile.name, timeAgo: "now", isDirectMessage: true))
+                    // Use the same trimmed name that was added to ChannelsManager
+                    let channelName = profile.name.trimmingCharacters(in: .whitespaces)
+                    MessagesView(channel: Channel(name: channelName, timeAgo: "now", isDirectMessage: true))
                 } else {
                     MessagesView(channel: Channel(name: "Direct Message", timeAgo: "now", isDirectMessage: true))
                 }
@@ -660,7 +724,174 @@ struct MatchmakingView: View {
             .navigationDestination(item: $groupToNavigateTo) { channel in
                 MessagesView(channel: channel)
             }
+            .task {
+                await loadProfiles()
+            }
+            .alert("Error", isPresented: $showError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage)
+            }
         }
+    }
+    
+    // MARK: - Load Profiles from Firebase
+    private func loadProfiles() async {
+        isLoading = true
+        do {
+            // Get current user ID to exclude from results
+            let currentUserID = userDataManager.profile.userID
+            
+            // Fetch all user profiles from Firebase
+            let userProfiles = try await FirebaseService.shared.fetchAllUserProfiles(
+                excludingUserID: currentUserID,
+                limit: 50
+            )
+            
+            // Convert UserProfile to Profile for matchmaking
+            let matchmakingProfiles = userProfiles.compactMap { userProfile -> Profile? in
+                convertToMatchmakingProfile(userProfile)
+            }
+            
+            await MainActor.run {
+                if matchmakingProfiles.isEmpty {
+                    // If no real profiles, fall back to mock data
+                    self.profiles = mockProfiles
+                } else {
+                    self.profiles = matchmakingProfiles
+                }
+                self.isLoading = false
+            }
+        } catch {
+            await MainActor.run {
+                self.isLoading = false
+                self.errorMessage = "Failed to load profiles: \(error.localizedDescription)"
+                self.showError = true
+                // Fall back to mock data on error
+                self.profiles = mockProfiles
+            }
+            print("Error loading profiles: \(error)")
+        }
+    }
+    
+    // MARK: - Convert UserProfile to Profile
+    private func convertToMatchmakingProfile(_ userProfile: UserProfile) -> Profile? {
+        // Require at least a name to show in matchmaking
+        guard let firstName = userProfile.firstName, !firstName.isEmpty else {
+            return nil
+        }
+        
+        // Build full name
+        let lastName = userProfile.lastName ?? ""
+        let fullName = "\(firstName) \(lastName)".trimmingCharacters(in: .whitespaces)
+        
+        // Calculate age from dateOfBirth
+        let age: Int
+        if let dateOfBirth = userProfile.dateOfBirth {
+            let calendar = Calendar.current
+            let ageComponents = calendar.dateComponents([.year], from: dateOfBirth, to: Date())
+            age = ageComponents.year ?? 0
+        } else if let ageRange = userProfile.ageRange {
+            // Parse age range to get approximate age
+            if ageRange == "18-21" {
+                age = 20
+            } else if ageRange == "22-25" {
+                age = 24
+            } else if ageRange == "26-29" {
+                age = 28
+            } else if ageRange == "30+" {
+                age = 32
+            } else {
+                age = 28 // Default
+            }
+        } else {
+            age = 28 // Default if no age info
+        }
+        
+        // Location - use town or zipcode, or default
+        let location: String
+        if let town = userProfile.town, !town.isEmpty {
+            location = "\(town)"
+        } else if let zipcode = userProfile.zipcode, !zipcode.isEmpty {
+            location = "\(zipcode)"
+        } else {
+            location = "Nearby"
+        }
+        
+        // Profile picture - use photoURL if available, otherwise use a default image
+        let profilePicFileName: String
+        if let photoURL = userProfile.photoURL, !photoURL.isEmpty {
+            // For now, use a default image name. In production, you'd load the image from URL
+            profilePicFileName = "SmilingMomWithDaugther" // Default
+        } else {
+            // Cycle through available images based on userID hash
+            let imageNames = ["SmilingMomWithDaugther", "MomWithPointingBaby", "GrassGirl", "HappyMom", "ExtremelyHappyLady"]
+            if let userID = userProfile.userID {
+                let index = abs(userID.hashValue) % imageNames.count
+                profilePicFileName = imageNames[index]
+            } else {
+                profilePicFileName = "SmilingMomWithDaugther"
+            }
+        }
+        
+        // Bio - use shortDescription or create one from interests
+        let bio: String
+        if let description = userProfile.shortDescription, !description.isEmpty {
+            bio = description
+        } else {
+            let interestsText = userProfile.interests?.joined(separator: ", ") ?? ""
+            let tagsText = userProfile.parentTags?.joined(separator: ", ") ?? ""
+            if !interestsText.isEmpty || !tagsText.isEmpty {
+                bio = "\(tagsText)\(tagsText.isEmpty ? "" : ". ")\(interestsText.isEmpty ? "" : "Loves \(interestsText).")"
+            } else {
+                bio = "Looking to connect with other moms!"
+            }
+        }
+        
+        // Tags - combine parentTags and interests
+        var tags: [String] = []
+        if let parentTags = userProfile.parentTags {
+            tags.append(contentsOf: parentTags)
+        }
+        if let interests = userProfile.interests {
+            tags.append(contentsOf: interests)
+        }
+        // Add child age info if available
+        if let childAges = userProfile.childAges, !childAges.isEmpty {
+            let ageStrings = childAges.compactMap { age -> String? in
+                guard age >= 0 else { return nil }
+                if age == 0 {
+                    return "Newborn"
+                } else if age < 1 {
+                    // For months, we'd need a separate field. For now, treat as infant
+                    return "Infant"
+                } else if age < 3 {
+                    return "Toddler (\(age))"
+                } else if age < 13 {
+                    return "Child (\(age))"
+                } else {
+                    return "Teen (\(age))"
+                }
+            }
+            tags.append(contentsOf: ageStrings)
+        }
+        
+        // Groups - use channelMemberships
+        let groups = userProfile.channelMemberships ?? []
+        
+        // Use userID as the Profile id for stable identification
+        let profileID = userProfile.userID ?? UUID().uuidString
+        
+        return Profile(
+            id: profileID,
+            name: fullName,
+            age: age,
+            location: location,
+            profilePicFileName: profilePicFileName,
+            bio: bio,
+            tags: tags,
+            groups: groups
+        )
     }
 }
 

@@ -11,7 +11,6 @@ import CoreLocation
 import Combine
 
 struct MapView: View {
-    @State private var currentTab: TabDestination = .map
     @State private var region = MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 41.9900, longitude: -87.7000), // Chicago 60659 area (West Ridge)
         span: MKCoordinateSpan(latitudeDelta: 0.08, longitudeDelta: 0.08)
@@ -532,19 +531,6 @@ struct MapView: View {
                         .background(Color(hex: "F8F5EE"))
                     }
                 }
-                
-                // Bottom Nav overlaid so it doesn’t steal vertical space from the map
-                VStack {
-                    Spacer()
-                    BottomNavBar(currentTab: $currentTab)
-                        .padding(.horizontal, 50)
-                        .padding(.bottom, 12)
-                        .background(
-                            Color(hex: "F8F5EE")
-                                .ignoresSafeArea(edges: .bottom)
-                        )
-                }
-                .ignoresSafeArea(edges: .bottom)
             }
             .toolbar(.hidden, for: .navigationBar)
             .onAppear {

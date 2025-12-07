@@ -18,7 +18,6 @@ struct ForumView: View {
     @EnvironmentObject var userDataManager: UserDataManager
     @State private var showChannels = false
     @State private var showLinks = false
-    @State private var currentTab: TabDestination = .forum
     @State private var showCreatePost = false
     @State private var posts: [ForumPost] = []
     @State private var isLoading = false
@@ -219,13 +218,6 @@ struct ForumView: View {
                         .padding(.trailing, 20)
                         .padding(.bottom, 100)
                     }
-                }
-                
-                // Bottom Nav Bar
-                VStack {
-                    Spacer()
-                    BottomNavBar(currentTab: $currentTab)
-                        .padding(.bottom, 5)
                 }
             }
             .toolbar(.hidden, for: .navigationBar)

@@ -233,12 +233,16 @@ struct CreatePostView: View {
     }
     
     private func createPost() {
-        // Require login (Option B: pseudonymous)
-        guard let userID = userDataManager.profile.userID else {
+        // Require login - get userID from profile or Firebase Auth
+        guard let userID = FirebaseService.shared.getCurrentUserID() else {
             errorMessage = "Please log in to create a post"
             showError = true
             return
         }
+
+        // Always update profile to match Auth UID
+        userDataManager.profile.userID = userID
+
         
         let trimmedContent = content.trimmingCharacters(in: .whitespacesAndNewlines)
         

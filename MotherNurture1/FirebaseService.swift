@@ -7,6 +7,7 @@
 
 import Foundation
 import FirebaseFirestore
+import FirebaseAuth
 
 class FirebaseService {
 
@@ -14,25 +15,151 @@ class FirebaseService {
     let db = Firestore.firestore()
 
     private init() {}
+    
+    // -----------------------------------------------------
+    // MARK: - Authentication
+    // -----------------------------------------------------
+    /// Sign in anonymously - creates a Firebase Auth user
+    func signInAnonymously() async throws -> String {
+        // Check if already signed in
+        if let currentUser = Auth.auth().currentUser {
+            print("✅ Already signed in with UID: \(currentUser.uid)")
+            return currentUser.uid
+        }
+        
+        // Sign in anonymously
+        print("🔐 Attempting anonymous sign in...")
+        print("   Firebase Auth instance: \(Auth.auth())")
+        do {
+            let result = try await Auth.auth().signInAnonymously()
+            print("✅ Signed in anonymously with UID: \(result.user.uid)")
+            print("   Is anonymous: \(result.user.isAnonymous)")
+            return result.user.uid
+        } catch let error as NSError {
+            print("❌ ========== ANONYMOUS SIGN IN ERROR ==========")
+            print("Error type: \(type(of: error))")
+            print("Error description: \(error.localizedDescription)")
+            print("Error domain: \(error.domain)")
+            print("Error code: \(error.code)")
+            print("Error userInfo: \(error.userInfo)")
+            
+            // Check for Firebase Auth specific errors
+            if error.domain.contains("FIRAuthErrorDomain") || error.domain.contains("Auth") {
+                if let authErrorCode = AuthErrorCode(rawValue: error.code) {
+                    print("Firebase Auth Error Code: \(authErrorCode.rawValue)")
+                    
+                    if authErrorCode == .operationNotAllowed {
+                        print("⚠️⚠️⚠️ CRITICAL: Anonymous authentication is NOT enabled!")
+                        print("   Please go to Firebase Console → Authentication → Sign-in method")
+                        print("   Enable 'Anonymous' and click Save")
+                        print("   Then try again!")
+                    } else if authErrorCode == .networkError {
+                        print("⚠️ Network error occurred - check your internet connection")
+                    } else if authErrorCode == .internalError {
+                        print("⚠️ Internal Firebase error occurred")
+                    } else {
+                        print("⚠️ Unknown Firebase Auth error: \(authErrorCode)")
+                    }
+                } else {
+                    print("⚠️ Could not parse AuthErrorCode for code: \(error.code)")
+                }
+            } else {
+                print("⚠️ Error is not from Firebase Auth domain")
+            }
+            print("================================================")
+            throw error
+        } catch {
+            print("❌ Unexpected error type: \(type(of: error))")
+            print("Error: \(error)")
+            throw error
+        }
+    }
+    
+    /// Get current authenticated user ID
+    func getCurrentUserID() -> String? {
+        return Auth.auth().currentUser?.uid
+    }
+    
+    /// Check if user is authenticated
+    func isAuthenticated() -> Bool {
+        return Auth.auth().currentUser != nil
+    }
+    
+    /// Sign out
+    func signOut() throws {
+        try Auth.auth().signOut()
+        print("✅ Signed out")
+    }
 
     // -----------------------------------------------------
     // MARK: - Save User Profile
     // -----------------------------------------------------
     func saveUserProfile(_ profile: UserProfile) async throws -> String {
+        print("💾 saveUserProfile called")
+        print("   Profile userID: \(profile.userID ?? "nil")")
+        print("   Profile email: \(profile.email ?? "nil")")
+        
+        // Get the authenticated user ID - this is the source of truth
+        guard let authUserID = Auth.auth().currentUser?.uid else {
+            let error = NSError(
+                domain: "FirebaseService",
+                code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "User must be authenticated to save profile"]
+            )
+            print("❌ No authenticated user found!")
+            throw error
+        }
+        
+        print("   Current Auth user: \(authUserID)")
+        
+        // Always use the authenticated user's ID as the document ID
+        // This ensures consistency and allows security rules to work properly
+        let userID = authUserID
+        
         var profileDict = profile.toDictionary()
         profileDict["updatedAt"] = Timestamp(date: Date())
-
-        // Update if userID exists
-        if let userID = profile.userID {
-            try await db.collection("users").document(userID).setData(profileDict, merge: true)
-            print("✅ Updated existing user profile")
-            return userID
+        profileDict["userID"] = userID // Ensure userID is in the dictionary
+        
+        // Add createdAt if it doesn't exist
+        if profileDict["createdAt"] == nil {
+            profileDict["createdAt"] = Timestamp(date: Date())
         }
-
-        // Create a new document
-        let docRef = try await db.collection("users").addDocument(data: profileDict)
-        print("✅ Created new user profile")
-        return docRef.documentID
+        
+        // Always use setData with the authenticated user's ID as document ID
+        print("💾 Saving user profile with ID: \(userID)")
+        print("   Profile data keys: \(profileDict.keys.sorted())")
+        
+        do {
+            // Use setData with merge: true to create or update
+            try await db.collection("users").document(userID).setData(profileDict, merge: true)
+            print("✅ Successfully saved user profile with ID: \(userID)")
+            return userID
+        } catch {
+            print("❌ ========== FIRESTORE SAVE ERROR ==========")
+            print("Error type: \(type(of: error))")
+            print("Error description: \(error.localizedDescription)")
+            
+            if let nsError = error as NSError? {
+                print("Error domain: \(nsError.domain)")
+                print("Error code: \(nsError.code)")
+                print("Error userInfo: \(nsError.userInfo)")
+                
+                // Check for Firestore specific errors
+                if nsError.domain.contains("FIRFirestoreErrorDomain") {
+                    print("⚠️ This is a Firestore error")
+                    if nsError.code == 7 { // Permission denied
+                        print("⚠️ PERMISSION DENIED - Check Firestore security rules!")
+                        print("   Make sure authenticated users can write to /users/{userId}")
+                    } else if nsError.code == 14 { // Unavailable
+                        print("⚠️ Firestore is unavailable - check network connection")
+                    } else if nsError.code == 13 { // Internal error
+                        print("⚠️ Firestore internal error - this might be a temporary issue")
+                    }
+                }
+            }
+            print("=============================================")
+            throw error
+        }
     }
 
     // -----------------------------------------------------
@@ -80,6 +207,31 @@ class FirebaseService {
     // -----------------------------------------------------
     func loadUserProfile(userID: String) async throws -> UserProfile? {
         return try await getUserProfile(userID: userID)
+    }
+    
+    // -----------------------------------------------------
+    // MARK: - Fetch All User Profiles (for matchmaking)
+    // -----------------------------------------------------
+    func fetchAllUserProfiles(excludingUserID: String? = nil, limit: Int = 50) async throws -> [UserProfile] {
+        let query = db.collection("users").limit(to: limit)
+        
+        // If excluding a user, we'll filter after fetching
+        // (Firestore doesn't support != operator easily, so we filter in code)
+        let snapshot = try await query.getDocuments()
+        
+        var profiles: [UserProfile] = []
+        for doc in snapshot.documents {
+            // Skip the current user if specified
+            if let excludingID = excludingUserID, doc.documentID == excludingID {
+                continue
+            }
+            
+            let profile = parseUserProfile(from: doc.data(), userID: doc.documentID)
+            profiles.append(profile)
+        }
+        
+        print("✅ Fetched \(profiles.count) user profiles for matchmaking")
+        return profiles
     }
 
     // -----------------------------------------------------
@@ -153,6 +305,20 @@ class FirebaseService {
     // MARK: - Forum Posts
     // -----------------------------------------------------
     func createPost(_ post: ForumPost) async throws -> String {
+        // Ensure user is authenticated before creating post
+        guard let currentUserID = getCurrentUserID() else {
+            throw NSError(domain: "FirebaseService",
+                          code: -1,
+                          userInfo: [NSLocalizedDescriptionKey: "User must be authenticated to create posts"])
+        }
+        
+        // Verify the post authorID matches the authenticated user
+        guard post.authorID == currentUserID else {
+            throw NSError(domain: "FirebaseService",
+                          code: -1,
+                          userInfo: [NSLocalizedDescriptionKey: "Post authorID must match authenticated user"])
+        }
+        
         let postDict = post.toDictionary()
         let docRef = try await db.collection("forumPosts").addDocument(data: postDict)
         print("✅ Created new forum post")
@@ -191,6 +357,35 @@ class FirebaseService {
         return snapshot.documents.compactMap { doc in
             ForumPost.fromDictionary(doc.data(), id: doc.documentID)
         }
+    }
+    
+    func deletePost(postID: String) async throws {
+        // Ensure user is authenticated
+        guard let currentUserID = getCurrentUserID() else {
+            throw NSError(domain: "FirebaseService",
+                          code: -1,
+                          userInfo: [NSLocalizedDescriptionKey: "User must be authenticated to delete posts"])
+        }
+        
+        // Verify the post exists and belongs to the user
+        let postRef = db.collection("forumPosts").document(postID)
+        let doc = try await postRef.getDocument()
+        
+        guard doc.exists, let data = doc.data() else {
+            throw NSError(domain: "FirebaseService",
+                          code: -1,
+                          userInfo: [NSLocalizedDescriptionKey: "Post not found"])
+        }
+        
+        guard let authorID = data["authorID"] as? String, authorID == currentUserID else {
+            throw NSError(domain: "FirebaseService",
+                          code: -1,
+                          userInfo: [NSLocalizedDescriptionKey: "You can only delete your own posts"])
+        }
+        
+        // Delete the post
+        try await postRef.delete()
+        print("✅ Deleted post: \(postID)")
     }
     
     // -----------------------------------------------------
@@ -275,3 +470,90 @@ class FirebaseService {
         }.filter { !$0.isEmpty }
     }
 }
+
+// MARK: - Comments Extension
+extension FirebaseService {
+
+    // Create a comment (alternative to addComment)
+    func createComment(_ comment: Comment) async throws -> String {
+        guard let currentUserID = getCurrentUserID() else {
+            throw NSError(domain: "FirebaseService", code: 401, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])
+        }
+
+        // Verify the comment authorID matches the authenticated user
+        guard comment.authorID == currentUserID else {
+            throw NSError(domain: "FirebaseService", code: 403, userInfo: [NSLocalizedDescriptionKey: "You can only post comments as yourself"])
+        }
+
+        let commentDict = comment.toDictionary()
+        
+        // If comment has an ID, use it; otherwise create a new document
+        if let commentID = comment.id, !commentID.isEmpty {
+            let docRef = db.collection("comments").document(commentID)
+            try await docRef.setData(commentDict)
+            
+            // Update post comment count
+            let postRef = db.collection("forumPosts").document(comment.postID)
+            try await postRef.updateData([
+                "commentCount": FieldValue.increment(Int64(1)),
+                "updatedAt": Timestamp(date: Date())
+            ])
+            
+            return commentID
+        } else {
+            // Create new comment document
+            let docRef = try await db.collection("comments").addDocument(data: commentDict)
+            
+            // Update post comment count
+            let postRef = db.collection("forumPosts").document(comment.postID)
+            try await postRef.updateData([
+                "commentCount": FieldValue.increment(Int64(1)),
+                "updatedAt": Timestamp(date: Date())
+            ])
+            
+            print("✅ Created new comment")
+            return docRef.documentID
+        }
+    }
+
+    // Delete a comment
+    func deleteComment(commentID: String) async throws {
+        guard let currentUserID = getCurrentUserID() else {
+            throw NSError(domain: "FirebaseService", code: 401, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])
+        }
+
+        let docRef = db.collection("comments").document(commentID)
+        let snapshot = try await docRef.getDocument()
+        
+        guard snapshot.exists, let data = snapshot.data() else {
+            throw NSError(domain: "FirebaseService", code: 404, userInfo: [NSLocalizedDescriptionKey: "Comment not found"])
+        }
+
+        // Use authorID (not userID) to match the Comment model
+        guard let authorID = data["authorID"] as? String else {
+            throw NSError(domain: "FirebaseService", code: 404, userInfo: [NSLocalizedDescriptionKey: "Comment data is invalid"])
+        }
+
+        guard authorID == currentUserID else {
+            throw NSError(domain: "FirebaseService", code: 403, userInfo: [NSLocalizedDescriptionKey: "You can only delete your own comments"])
+        }
+
+        // Get postID before deleting
+        let postID = data["postID"] as? String ?? ""
+        
+        // Delete the comment
+        try await docRef.delete()
+        
+        // Decrement comment count on the post
+        if !postID.isEmpty {
+            let postRef = db.collection("forumPosts").document(postID)
+            try await postRef.updateData([
+                "commentCount": FieldValue.increment(Int64(-1)),
+                "updatedAt": Timestamp(date: Date())
+            ])
+        }
+        
+        print("✅ Deleted comment")
+    }
+}
+

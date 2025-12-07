@@ -6,6 +6,8 @@
 //
 
 import SwiftUI
+import FirebaseAuth
+import FirebaseFirestore
 
 struct SignUpView: View {
     @Environment(\.dismiss) var dismiss
@@ -16,7 +18,16 @@ struct SignUpView: View {
     @State private var email: String = ""
     @State private var showDatePicker: Bool = false
     @State private var navigateToWelcome = false
-    
+
+    // Password fields
+    @State private var password: String = ""
+    @State private var confirmPassword: String = ""
+    @State private var isPasswordVisible: Bool = false
+    @State private var isConfirmPasswordVisible: Bool = false
+
+    @State private var validationError: String? = nil
+    @State private var isSubmitting: Bool = false
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -116,6 +127,29 @@ struct SignUpView: View {
                             .textFieldStyle(SignUpTextFieldStyle())
                             .keyboardType(.emailAddress)
                             .autocapitalization(.none)
+                            .disableAutocorrection(true)
+
+                        // Create Password with Show/Hide
+                        PasswordField(
+                            title: "Create Password (min 6 chars)",
+                            text: $password,
+                            isVisible: $isPasswordVisible
+                        )
+
+                        // Confirm Password with Show/Hide
+                        PasswordField(
+                            title: "Confirm Password",
+                            text: $confirmPassword,
+                            isVisible: $isConfirmPasswordVisible
+                        )
+
+                        // Validation error
+                        if let validationError = validationError {
+                            Text(validationError)
+                                .font(.system(size: 14, design: .rounded))
+                                .foregroundColor(.red)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 10)
@@ -123,23 +157,26 @@ struct SignUpView: View {
                 }
                 
                 // Sign Up Button
-                Button(action: {
-                    // Save sign-up data to UserDataManager
-                    userDataManager.profile.firstName = firstName.isEmpty ? nil : firstName
-                    userDataManager.profile.lastName = lastName.isEmpty ? nil : lastName
-                    userDataManager.profile.dateOfBirth = dateOfBirth
-                    userDataManager.profile.email = email.isEmpty ? nil : email
-                    
-                    navigateToWelcome = true
-                }) {
-                    Text("Sign up")
-                        .font(.system(size: 18, weight: .semibold, design: .rounded))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 56)
-                        .background(Color(hex: "8B9A7E"))
-                        .cornerRadius(12)
+                Button(action: handleSignUpTapped) {
+                    if isSubmitting {
+                        ProgressView()
+                            .tint(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 56)
+                            .background(Color(hex: "8B9A7E"))
+                            .cornerRadius(12)
+                    } else {
+                        Text("Sign up")
+                            .font(.system(size: 18, weight: .semibold, design: .rounded))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 56)
+                            .background(Color(hex: "8B9A7E"))
+                            .cornerRadius(12)
+                            .opacity(canSubmit ? 1.0 : 0.6)
+                    }
                 }
+                .disabled(!canSubmit || isSubmitting)
                 .padding(.horizontal, 20)
                 .padding(.bottom, 30)
                 }
@@ -156,6 +193,220 @@ struct SignUpView: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "MMM d, yyyy"
         return formatter
+    }
+
+    private var canSubmit: Bool {
+        // Basic checks; you can expand with email format checks as needed
+        !firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !lastName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        password.count >= 6 &&
+        confirmPassword == password
+    }
+
+    private func handleSignUpTapped() {
+        validationError = nil
+
+        // Validate
+        guard !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            validationError = "Please enter your email."
+            return
+        }
+        guard password.count >= 6 else {
+            validationError = "Password must be at least 6 characters."
+            return
+        }
+        guard confirmPassword == password else {
+            validationError = "Passwords do not match."
+            return
+        }
+
+        // Save sign-up data to UserDataManager profile
+        userDataManager.profile.firstName = firstName.isEmpty ? nil : firstName
+        userDataManager.profile.lastName = lastName.isEmpty ? nil : lastName
+        userDataManager.profile.dateOfBirth = dateOfBirth
+        userDataManager.profile.email = email.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Authenticate user with Firebase Anonymous Auth and create account
+        isSubmitting = true
+        Task {
+            do {
+                print("🚀 ========== STARTING SIGN UP PROCESS ==========")
+                let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+                print("📧 Email: \(trimmedEmail)")
+                
+                // Check if email already exists
+                print("🔍 Step 1: Checking if email exists...")
+                let emailExists = await userDataManager.profileExists(email: trimmedEmail)
+                if emailExists {
+                    print("❌ Email already exists")
+                    await MainActor.run {
+                        isSubmitting = false
+                        validationError = "An account with this email already exists. Please log in instead."
+                    }
+                    return
+                }
+                print("✅ Email is available")
+                
+                // Sign out any existing session before creating new account
+                print("🔍 Step 2: Checking for existing authentication...")
+                if FirebaseService.shared.isAuthenticated() {
+                    print("⚠️ Existing session found, signing out...")
+                    do {
+                        try FirebaseService.shared.signOut()
+                        print("✅ Signed out successfully")
+                        // Small delay to ensure sign out completes
+                        try? await Task.sleep(nanoseconds: 300_000_000) // 0.3 seconds
+                    } catch {
+                        print("⚠️ Error signing out (continuing anyway): \(error)")
+                    }
+                } else {
+                    print("✅ No existing session")
+                }
+                
+                // Ensure profile data is set before saving
+                print("🔍 Step 3: Setting profile data...")
+                userDataManager.profile.firstName = firstName.isEmpty ? nil : firstName
+                userDataManager.profile.lastName = lastName.isEmpty ? nil : lastName
+                userDataManager.profile.dateOfBirth = dateOfBirth
+                userDataManager.profile.email = trimmedEmail
+                
+                // Ensure createdAt is set
+                if userDataManager.profile.createdAt == nil {
+                    userDataManager.profile.createdAt = Timestamp(date: Date())
+                }
+                
+                print("   ✅ First Name: \(userDataManager.profile.firstName ?? "nil")")
+                print("   ✅ Last Name: \(userDataManager.profile.lastName ?? "nil")")
+                print("   ✅ Email: \(userDataManager.profile.email ?? "nil")")
+                print("   ✅ CreatedAt: \(userDataManager.profile.createdAt != nil ? "set" : "nil")")
+                
+                // Save the profile to Firebase (this will authenticate anonymously if needed)
+                print("🔍 Step 4: Saving to Firebase...")
+                try await userDataManager.saveToFirebase()
+                print("✅ saveToFirebase completed successfully")
+                print("🎉 ========== SIGN UP SUCCESSFUL ==========")
+                
+                await MainActor.run {
+                    isSubmitting = false
+                    navigateToWelcome = true
+                }
+            } catch {
+                // Print detailed error information
+                print("❌ ========== SIGN UP ERROR ==========")
+                print("Error type: \(type(of: error))")
+                print("Error description: \(error.localizedDescription)")
+                
+                if let nsError = error as NSError? {
+                    print("Error domain: \(nsError.domain)")
+                    print("Error code: \(nsError.code)")
+                    print("Error userInfo: \(nsError.userInfo)")
+                    if let underlyingError = nsError.userInfo[NSUnderlyingErrorKey] as? NSError {
+                        print("Underlying error domain: \(underlyingError.domain)")
+                        print("Underlying error code: \(underlyingError.code)")
+                        print("Underlying error description: \(underlyingError.localizedDescription)")
+                    }
+                }
+                
+                // Check for Firebase Auth specific errors
+                if let authError = error as? NSError {
+                    if authError.domain.contains("FIRAuthErrorDomain") || authError.domain.contains("Auth") {
+                        if let authErrorCode = AuthErrorCode(rawValue: authError.code) {
+                            print("Firebase Auth Error Code: \(authErrorCode.rawValue)")
+                            if authErrorCode == .operationNotAllowed {
+                                print("⚠️ Anonymous authentication is not enabled!")
+                            }
+                        }
+                    }
+                }
+                
+                print("=====================================")
+                
+                await MainActor.run {
+                    isSubmitting = false
+                    let errorMessage = error.localizedDescription
+                    
+                    // Check for specific Firebase Auth errors
+                    if let nsError = error as NSError? {
+                        if nsError.domain.contains("FIRAuthErrorDomain") || nsError.domain.contains("Auth") {
+                            if let authErrorCode = AuthErrorCode(rawValue: nsError.code) {
+                                if authErrorCode == .operationNotAllowed {
+                                    validationError = "Anonymous authentication is not enabled. Please enable it in Firebase Console: Authentication → Sign-in method → Anonymous"
+                                } else if authErrorCode == .networkError {
+                                    validationError = "Network error. Please check your internet connection and try again."
+                                } else if authErrorCode == .internalError {
+                                    // Replace generic message with guidance
+                                    validationError = "Authentication error. Please verify Anonymous sign-in is enabled and try again."
+                                } else {
+                                    validationError = "Authentication error (code: \(authErrorCode.rawValue)). Please check the console for details."
+                                }
+                            } else {
+                                validationError = "Authentication error (code: \(nsError.code)). Please check the console for details."
+                            }
+                        } else if nsError.domain.contains("FIRFirestoreErrorDomain") {
+                            // Map Firestore errors clearly
+                            switch nsError.code {
+                            case 7:
+                                validationError = "Permission denied. Check your Firestore security rules for /users/{userId}."
+                            case 14:
+                                validationError = "Firestore unavailable. Check your network connection and try again."
+                            case 13:
+                                validationError = "Firestore internal error. This may be temporary. Try again later."
+                            default:
+                                validationError = "Firestore error (code: \(nsError.code)). See console for details."
+                            }
+                        } else if errorMessage.localizedCaseInsensitiveContains("network") {
+                            validationError = "Network error. Please check your connection and try again."
+                        } else if errorMessage.localizedCaseInsensitiveContains("permission") || errorMessage.localizedCaseInsensitiveContains("insufficient") {
+                            validationError = "Permission denied. Please check your Firebase security rules."
+                        } else if errorMessage.localizedCaseInsensitiveContains("already exists") || errorMessage.localizedCaseInsensitiveContains("already in use") {
+                            validationError = "An account with this email already exists. Please log in instead."
+                        } else {
+                            validationError = "Failed to create account: \(errorMessage). Check console for details."
+                        }
+                    } else {
+                        validationError = "Failed to create account: \(errorMessage). Check console for details."
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Reuse the same PasswordField style used on ContentView
+private struct PasswordField: View {
+    let title: String
+    @Binding var text: String
+    @Binding var isVisible: Bool
+    
+    var body: some View {
+        HStack {
+            if isVisible {
+                TextField(title, text: $text)
+                    .font(.system(size: 16, design: .rounded))
+                    .foregroundColor(Color(hex: "5C3D2E"))
+                    .textInputAutocapitalization(.never)
+                    .disableAutocorrection(true)
+            } else {
+                SecureField(title, text: $text)
+                    .font(.system(size: 16, design: .rounded))
+                    .foregroundColor(Color(hex: "5C3D2E"))
+            }
+            
+            Button(action: { isVisible.toggle() }) {
+                Text(isVisible ? "Hide" : "Show")
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .foregroundColor(Color(hex: "5C3D2E"))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .background(Color(hex: "F8F5EE").opacity(0.4))
+                    .cornerRadius(6)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding()
+        .background(Color(hex: "D4C4B0"))
+        .cornerRadius(8)
     }
 }
 
