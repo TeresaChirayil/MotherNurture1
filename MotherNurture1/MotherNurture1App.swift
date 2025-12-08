@@ -20,20 +20,23 @@ struct MotherNurture1App: App {
         WindowGroup {
             Group {
                 if userDataManager.isAuthenticated {
-                    // Use NavigationStack only for authenticated views, not for login
+                    
+                    // Authenticated area
                     NavigationStack {
                         MainTabView()
                             .environmentObject(userDataManager)
+                            .navigationBarBackButtonHidden(true)   // ← moved HERE
                     }
-                    .navigationBarBackButtonHidden(true)
+                    
                 } else {
-                    // Login screen - no NavigationStack to prevent back navigation
+                    
+                    // Login Screen — NOT wrapped in NavigationStack
                     ContentView()
                         .environmentObject(userDataManager)
                 }
             }
-            // Smoothen push/pop animations across the app
-            .animation(.easeInOut(duration: 0.25), value: userDataManager.isAuthenticated)
+            .animation(.easeInOut(duration: 0.25),
+                       value: userDataManager.isAuthenticated)
         }
     }
 }

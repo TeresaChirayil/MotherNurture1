@@ -27,6 +27,8 @@ struct SignUpView: View {
 
     @State private var validationError: String? = nil
     @State private var isSubmitting: Bool = false
+    @State private var showEULA: Bool = false
+    @State private var hasAcceptedEULA: Bool = false
 
     var body: some View {
         NavigationStack {
@@ -143,6 +145,41 @@ struct SignUpView: View {
                             isVisible: $isConfirmPasswordVisible
                         )
 
+                        // EULA Acceptance
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 12) {
+                                Button(action: {
+                                    hasAcceptedEULA.toggle()
+                                }) {
+                                    Image(systemName: hasAcceptedEULA ? "checkmark.square.fill" : "square")
+                                        .foregroundColor(hasAcceptedEULA ? Color(hex: "8B9A7E") : Color(hex: "5C3D2E"))
+                                        .font(.system(size: 20))
+                                }
+                                .buttonStyle(.plain)
+                                
+                                HStack(spacing: 4) {
+                                    Text("I agree to the")
+                                        .font(.system(size: 14, design: .rounded))
+                                        .foregroundColor(Color(hex: "5C3D2E"))
+                                    Button(action: {
+                                        showEULA = true
+                                    }) {
+                                        Text("Terms of Service")
+                                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                            .foregroundColor(Color(hex: "8B9A7E"))
+                                            .underline()
+                                    }
+                                }
+                            }
+                            
+                            if !hasAcceptedEULA && !validationError.isNilOrEmpty {
+                                Text("You must accept the Terms of Service to continue")
+                                    .font(.system(size: 12, design: .rounded))
+                                    .foregroundColor(.red)
+                            }
+                        }
+                        .padding(.vertical, 8)
+                        
                         // Validation error
                         if let validationError = validationError {
                             Text(validationError)
@@ -186,6 +223,9 @@ struct SignUpView: View {
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
+            .sheet(isPresented: $showEULA) {
+                EULAView(isPresented: $showEULA, hasAccepted: $hasAcceptedEULA)
+            }
         }
     }
     
@@ -201,7 +241,8 @@ struct SignUpView: View {
         !lastName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         password.count >= 6 &&
-        confirmPassword == password
+        confirmPassword == password &&
+        hasAcceptedEULA
     }
 
     private func handleSignUpTapped() {
@@ -218,6 +259,10 @@ struct SignUpView: View {
         }
         guard confirmPassword == password else {
             validationError = "Passwords do not match."
+            return
+        }
+        guard hasAcceptedEULA else {
+            validationError = "You must accept the Terms of Service to continue."
             return
         }
 
@@ -297,25 +342,22 @@ struct SignUpView: View {
                 print("Error type: \(type(of: error))")
                 print("Error description: \(error.localizedDescription)")
                 
-                if let nsError = error as NSError? {
-                    print("Error domain: \(nsError.domain)")
-                    print("Error code: \(nsError.code)")
-                    print("Error userInfo: \(nsError.userInfo)")
-                    if let underlyingError = nsError.userInfo[NSUnderlyingErrorKey] as? NSError {
-                        print("Underlying error domain: \(underlyingError.domain)")
-                        print("Underlying error code: \(underlyingError.code)")
-                        print("Underlying error description: \(underlyingError.localizedDescription)")
-                    }
+                let nsError = error as NSError
+                print("Error domain: \(nsError.domain)")
+                print("Error code: \(nsError.code)")
+                print("Error userInfo: \(nsError.userInfo)")
+                if let underlyingError = nsError.userInfo[NSUnderlyingErrorKey] as? NSError {
+                    print("Underlying error domain: \(underlyingError.domain)")
+                    print("Underlying error code: \(underlyingError.code)")
+                    print("Underlying error description: \(underlyingError.localizedDescription)")
                 }
                 
                 // Check for Firebase Auth specific errors
-                if let authError = error as? NSError {
-                    if authError.domain.contains("FIRAuthErrorDomain") || authError.domain.contains("Auth") {
-                        if let authErrorCode = AuthErrorCode(rawValue: authError.code) {
-                            print("Firebase Auth Error Code: \(authErrorCode.rawValue)")
-                            if authErrorCode == .operationNotAllowed {
-                                print("⚠️ Anonymous authentication is not enabled!")
-                            }
+                if nsError.domain.contains("FIRAuthErrorDomain") || nsError.domain.contains("Auth") {
+                    if let authErrorCode = AuthErrorCode(rawValue: nsError.code) {
+                        print("Firebase Auth Error Code: \(authErrorCode.rawValue)")
+                        if authErrorCode == .operationNotAllowed {
+                            print("⚠️ Anonymous authentication is not enabled!")
                         }
                     }
                 }
@@ -326,44 +368,41 @@ struct SignUpView: View {
                     isSubmitting = false
                     let errorMessage = error.localizedDescription
                     
-                    // Check for specific Firebase Auth errors
-                    if let nsError = error as NSError? {
-                        if nsError.domain.contains("FIRAuthErrorDomain") || nsError.domain.contains("Auth") {
-                            if let authErrorCode = AuthErrorCode(rawValue: nsError.code) {
-                                if authErrorCode == .operationNotAllowed {
-                                    validationError = "Anonymous authentication is not enabled. Please enable it in Firebase Console: Authentication → Sign-in method → Anonymous"
-                                } else if authErrorCode == .networkError {
-                                    validationError = "Network error. Please check your internet connection and try again."
-                                } else if authErrorCode == .internalError {
-                                    // Replace generic message with guidance
-                                    validationError = "Authentication error. Please verify Anonymous sign-in is enabled and try again."
-                                } else {
-                                    validationError = "Authentication error (code: \(authErrorCode.rawValue)). Please check the console for details."
-                                }
+                    // Check for specific Firebase Auth and Firestore errors
+                    let nsError = error as NSError
+                    if nsError.domain.contains("FIRAuthErrorDomain") || nsError.domain.contains("Auth") {
+                        if let authErrorCode = AuthErrorCode(rawValue: nsError.code) {
+                            if authErrorCode == .operationNotAllowed {
+                                validationError = "Anonymous authentication is not enabled. Please enable it in Firebase Console: Authentication → Sign-in method → Anonymous"
+                            } else if authErrorCode == .networkError {
+                                validationError = "Network error. Please check your internet connection and try again."
+                            } else if authErrorCode == .internalError {
+                                // Replace generic message with guidance
+                                validationError = "Authentication error. Please verify Anonymous sign-in is enabled and try again."
                             } else {
-                                validationError = "Authentication error (code: \(nsError.code)). Please check the console for details."
+                                validationError = "Authentication error (code: \(authErrorCode.rawValue)). Please check the console for details."
                             }
-                        } else if nsError.domain.contains("FIRFirestoreErrorDomain") {
-                            // Map Firestore errors clearly
-                            switch nsError.code {
-                            case 7:
-                                validationError = "Permission denied. Check your Firestore security rules for /users/{userId}."
-                            case 14:
-                                validationError = "Firestore unavailable. Check your network connection and try again."
-                            case 13:
-                                validationError = "Firestore internal error. This may be temporary. Try again later."
-                            default:
-                                validationError = "Firestore error (code: \(nsError.code)). See console for details."
-                            }
-                        } else if errorMessage.localizedCaseInsensitiveContains("network") {
-                            validationError = "Network error. Please check your connection and try again."
-                        } else if errorMessage.localizedCaseInsensitiveContains("permission") || errorMessage.localizedCaseInsensitiveContains("insufficient") {
-                            validationError = "Permission denied. Please check your Firebase security rules."
-                        } else if errorMessage.localizedCaseInsensitiveContains("already exists") || errorMessage.localizedCaseInsensitiveContains("already in use") {
-                            validationError = "An account with this email already exists. Please log in instead."
                         } else {
-                            validationError = "Failed to create account: \(errorMessage). Check console for details."
+                            validationError = "Authentication error (code: \(nsError.code)). Please check the console for details."
                         }
+                    } else if nsError.domain.contains("FIRFirestoreErrorDomain") {
+                        // Map Firestore errors clearly
+                        switch nsError.code {
+                        case 7:
+                            validationError = "Permission denied. Check your Firestore security rules for /users/{userId}."
+                        case 14:
+                            validationError = "Firestore unavailable. Check your network connection and try again."
+                        case 13:
+                            validationError = "Firestore internal error. This may be temporary. Try again later."
+                        default:
+                            validationError = "Firestore error (code: \(nsError.code)). See console for details."
+                        }
+                    } else if errorMessage.localizedCaseInsensitiveContains("network") {
+                        validationError = "Network error. Please check your connection and try again."
+                    } else if errorMessage.localizedCaseInsensitiveContains("permission") || errorMessage.localizedCaseInsensitiveContains("insufficient") {
+                        validationError = "Permission denied. Please check your Firebase security rules."
+                    } else if errorMessage.localizedCaseInsensitiveContains("already exists") || errorMessage.localizedCaseInsensitiveContains("already in use") {
+                        validationError = "An account with this email already exists. Please log in instead."
                     } else {
                         validationError = "Failed to create account: \(errorMessage). Check console for details."
                     }
@@ -419,6 +458,13 @@ struct SignUpTextFieldStyle: TextFieldStyle {
             .cornerRadius(8)
             .foregroundColor(Color(hex: "5C3D2E"))
             .font(.system(size: 16, design: .rounded))
+    }
+}
+
+// Helper extension for optional string
+extension Optional where Wrapped == String {
+    var isNilOrEmpty: Bool {
+        return self == nil || self!.isEmpty
     }
 }
 

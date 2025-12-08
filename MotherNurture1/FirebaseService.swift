@@ -178,6 +178,30 @@ class FirebaseService {
         try await db.collection("users").document(userID).setData(profileDict, merge: true)
         print("✅ Successfully updated profile")
     }
+    
+    // -----------------------------------------------------
+    // MARK: - Delete User Profile
+    // -----------------------------------------------------
+    func deleteUserProfile(userID: String) async throws {
+        guard let currentUserID = getCurrentUserID() else {
+            throw NSError(domain: "FirebaseService",
+                          code: 401,
+                          userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])
+        }
+        
+        guard userID == currentUserID else {
+            throw NSError(domain: "FirebaseService",
+                          code: 403,
+                          userInfo: [NSLocalizedDescriptionKey: "You can only delete your own profile"])
+        }
+        
+        // Delete the user profile document
+        try await db.collection("users").document(userID).delete()
+        print("✅ Successfully deleted user profile: \(userID)")
+        
+        // Note: We don't delete the user's posts/comments automatically
+        // You may want to add cascade deletion logic if needed
+    }
 
     // -----------------------------------------------------
     // MARK: - Fetch User Profile
@@ -294,6 +318,7 @@ class FirebaseService {
         profile.shortDescription = data["shortDescription"] as? String
         profile.photoURL = data["photoURL"] as? String
         profile.channelMemberships = data["channelMemberships"] as? [String]
+        profile.blockedUsers = data["blockedUsers"] as? [String]
 
         profile.createdAt = data["createdAt"] as? Timestamp
         profile.updatedAt = data["updatedAt"] as? Timestamp
@@ -477,11 +502,21 @@ extension FirebaseService {
     // Create a comment (alternative to addComment)
     func createComment(_ comment: Comment) async throws -> String {
         guard let currentUserID = getCurrentUserID() else {
+            print("❌ createComment: No authenticated user found")
             throw NSError(domain: "FirebaseService", code: 401, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])
         }
 
+        print("💬 createComment called")
+        print("   Current Auth UID: \(currentUserID)")
+        print("   Comment authorID: \(comment.authorID)")
+        print("   Comment postID: \(comment.postID)")
+        print("   Comment content: \(comment.content.prefix(50))...")
+
         // Verify the comment authorID matches the authenticated user
         guard comment.authorID == currentUserID else {
+            print("❌ createComment: authorID mismatch!")
+            print("   Expected: \(currentUserID)")
+            print("   Got: \(comment.authorID)")
             throw NSError(domain: "FirebaseService", code: 403, userInfo: [NSLocalizedDescriptionKey: "You can only post comments as yourself"])
         }
 
@@ -554,6 +589,65 @@ extension FirebaseService {
         }
         
         print("✅ Deleted comment")
+    }
+    
+    // -----------------------------------------------------
+    // MARK: - Block/Unblock Users
+    // -----------------------------------------------------
+    func blockUser(userID: String, userIDToBlock: String) async throws {
+        guard let currentUserID = getCurrentUserID() else {
+            throw NSError(domain: "FirebaseService", code: 401, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])
+        }
+        
+        guard userID == currentUserID else {
+            throw NSError(domain: "FirebaseService", code: 403, userInfo: [NSLocalizedDescriptionKey: "You can only block users from your own account"])
+        }
+        
+        // Get current user profile
+        let userRef = db.collection("users").document(userID)
+        let doc = try await userRef.getDocument()
+        
+        var blockedUsers: [String] = []
+        if let data = doc.data(), let existingBlocked = data["blockedUsers"] as? [String] {
+            blockedUsers = existingBlocked
+        }
+        
+        // Add user to blocked list if not already blocked
+        if !blockedUsers.contains(userIDToBlock) {
+            blockedUsers.append(userIDToBlock)
+            try await userRef.updateData([
+                "blockedUsers": blockedUsers,
+                "updatedAt": Timestamp(date: Date())
+            ])
+            print("✅ Blocked user: \(userIDToBlock)")
+        }
+    }
+    
+    func unblockUser(userID: String, userIDToUnblock: String) async throws {
+        guard let currentUserID = getCurrentUserID() else {
+            throw NSError(domain: "FirebaseService", code: 401, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])
+        }
+        
+        guard userID == currentUserID else {
+            throw NSError(domain: "FirebaseService", code: 403, userInfo: [NSLocalizedDescriptionKey: "You can only unblock users from your own account"])
+        }
+        
+        // Get current user profile
+        let userRef = db.collection("users").document(userID)
+        let doc = try await userRef.getDocument()
+        
+        guard let data = doc.data(), var blockedUsers = data["blockedUsers"] as? [String] else {
+            print("ℹ️ No blocked users to unblock")
+            return
+        }
+        
+        // Remove user from blocked list
+        blockedUsers.removeAll { $0 == userIDToUnblock }
+        try await userRef.updateData([
+            "blockedUsers": blockedUsers,
+            "updatedAt": Timestamp(date: Date())
+        ])
+        print("✅ Unblocked user: \(userIDToUnblock)")
     }
 }
 

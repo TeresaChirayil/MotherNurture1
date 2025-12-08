@@ -4,7 +4,9 @@ import FirebaseFirestore
 struct CommentRowView: View {
     let comment: Comment
     let canDelete: Bool
+    let canBlock: Bool
     let onDelete: () -> Void
+    let onBlock: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -27,6 +29,17 @@ struct CommentRowView: View {
                             .padding(.leading, 6)
                     }
                     .buttonStyle(.plain)
+                } else if canBlock, let onBlock = onBlock {
+                    Menu {
+                        Button(role: .destructive, action: onBlock) {
+                            Label("Block User", systemImage: "person.crop.circle.badge.xmark")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .foregroundColor(Color(hex: "5C3D2E"))
+                            .font(.system(size: 14, weight: .semibold))
+                            .padding(.leading, 6)
+                    }
                 }
             }
 

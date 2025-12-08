@@ -91,23 +91,23 @@ class UserDataManager: ObservableObject {
             // Ensure userID is set
             profile.userID = savedUserID
         
-        // Mark authenticated after a successful save
-        DispatchQueue.main.async {
-            self.isAuthenticated = true
-        }
-        
-        // Add user to their assigned channels in Firebase
-        if let channelMemberships = profile.channelMemberships {
+            // Mark authenticated after a successful save
+            DispatchQueue.main.async {
+                self.isAuthenticated = true
+            }
+            
+            // Add user to their assigned channels in Firebase
+            if let channelMemberships = profile.channelMemberships {
                 print("📝 Adding user to \(channelMemberships.count) channels...")
-            for channelName in channelMemberships {
-                do {
+                for channelName in channelMemberships {
+                    do {
                         try await firebaseService.addUserToChannel(userID: savedUserID, channelName: channelName)
                         print("✅ Added to channel: \(channelName)")
-                } catch {
-                    print("⚠️ Error adding user to channel \(channelName): \(error)")
-                    // Continue with other channels even if one fails
+                    } catch {
+                        print("⚠️ Error adding user to channel \(channelName): \(error)")
+                        // Continue with other channels even if one fails
+                    }
                 }
-            }
             }
         } catch {
             print("❌ Error saving profile to Firebase: \(error)")
@@ -185,5 +185,17 @@ class UserDataManager: ObservableObject {
             return false
         }
     }
+    
+    // -----------------------------------------------------
+    // MARK: - Clear Profile (instance method)
+    // -----------------------------------------------------
+    func clearProfile() {
+        // Reset in-memory profile
+        self.profile = UserProfile()
+        
+        // If you persist profile to UserDefaults or Keychain, clear that too:
+        UserDefaults.standard.removeObject(forKey: "userProfile") // if you use this key
+        
+        // Add any additional cleanup (e.g., local caches) here.
+    }
 }
-

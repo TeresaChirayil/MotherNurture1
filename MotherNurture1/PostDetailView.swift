@@ -22,9 +22,12 @@ struct PostDetailView: View {
     @State private var isPostingComment: Bool = false
     @State private var showError: Bool = false
     @State private var errorMessage: String = ""
+    @State private var commentAnonymously: Bool = false
     
     @State private var showDeletePostConfirmation: Bool = false
     @State private var showReportPostConfirmation: Bool = false
+    @State private var showBlockUserConfirmation: Bool = false
+    @State private var userToBlock: String? = nil
     
     init(post: ForumPost) {
         self.post = post
@@ -104,6 +107,16 @@ struct PostDetailView: View {
                 Button("Cancel", role: .cancel) { }
             } message: {
                 Text("Report this post as inappropriate or harmful content?")
+            }
+            .confirmationDialog("Block User", isPresented: $showBlockUserConfirmation, titleVisibility: .visible) {
+                Button("Block", role: .destructive) {
+                    if let userID = userToBlock {
+                        Task { await blockUser(userID) }
+                    }
+                }
+                Button("Cancel", role: .cancel) { }
+            } message: {
+                Text("Block this user? You won't see their posts or comments anymore.")
             }
         }
         .presentationDetents([.large])
@@ -189,9 +202,13 @@ struct PostDetailView: View {
                 ForEach(comments) { comment in
                     CommentRowView(
                         comment: comment,
-                        canDelete: canDeleteComment(comment)
+                        canDelete: canDeleteComment(comment),
+                        canBlock: !canDeleteComment(comment) && (userDataManager.profile.userID != nil && comment.authorID != userDataManager.profile.userID)
                     ) {
                         Task { await deleteComment(comment) }
+                    } onBlock: {
+                        userToBlock = comment.authorID
+                        showBlockUserConfirmation = true
                     }
                 }
             }
@@ -226,6 +243,14 @@ struct PostDetailView: View {
                 }
                 .disabled(newComment.isEmpty || isPostingComment)
             }
+            
+            // Anonymous toggle for comments
+            Toggle(isOn: $commentAnonymously) {
+                Text("Comment anonymously")
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundColor(Color(hex: "5C3D2E"))
+            }
+            .toggleStyle(SwitchToggleStyle(tint: Color(hex: "8B9A7E")))
         }
         .padding()
         .background(Color.white)
@@ -249,7 +274,16 @@ struct PostDetailView: View {
         guard let postID = currentPost.id else { return }
         isLoading = true
         do {
-            let fetchedComments = try await FirebaseService.shared.fetchComments(for: postID)
+            var fetchedComments = try await FirebaseService.shared.fetchComments(for: postID)
+            
+            // Filter out comments from blocked users
+            if let currentUserID = userDataManager.profile.userID,
+               let blockedUsers = userDataManager.profile.blockedUsers {
+                fetchedComments = fetchedComments.filter { comment in
+                    !blockedUsers.contains(comment.authorID)
+                }
+            }
+            
             await MainActor.run { self.comments = fetchedComments; self.isLoading = false }
         } catch {
             await MainActor.run {
@@ -261,8 +295,14 @@ struct PostDetailView: View {
     }
     
     private func postComment() {
-        guard let postID = currentPost.id,
-              let userID = userDataManager.profile.userID else {
+        guard let postID = currentPost.id else {
+            errorMessage = "Post ID is missing"
+            showError = true
+            return
+        }
+        
+        // Use the authenticated Firebase Auth user ID directly
+        guard let userID = FirebaseService.shared.getCurrentUserID() else {
             errorMessage = "Please log in to comment"
             showError = true
             return
@@ -275,14 +315,20 @@ struct PostDetailView: View {
             return
         }
         
-        let authorName = "\(userDataManager.profile.firstName ?? "") \(userDataManager.profile.lastName ?? "")".trimmingCharacters(in: .whitespaces)
-        let finalAuthorName = authorName.isEmpty ? "user\(userID.prefix(4))" : authorName
+        // Determine authorName based on anonymity toggle
+        let displayName: String
+        if commentAnonymously {
+            displayName = "Anonymous"
+        } else {
+            let authorName = "\(userDataManager.profile.firstName ?? "") \(userDataManager.profile.lastName ?? "")".trimmingCharacters(in: .whitespaces)
+            displayName = authorName.isEmpty ? "user\(userID.prefix(4))" : authorName
+        }
         
         let comment = Comment(
             postID: postID,
             content: trimmedContent,
             authorID: userID,
-            authorName: finalAuthorName
+            authorName: displayName
         )
         
         isPostingComment = true
@@ -291,6 +337,7 @@ struct PostDetailView: View {
                 _ = try await FirebaseService.shared.createComment(comment)
                 await MainActor.run {
                     self.newComment = ""
+                    self.commentAnonymously = false
                     self.isPostingComment = false
                 }
                 await loadComments()
@@ -404,6 +451,47 @@ struct PostDetailView: View {
         } catch {
             await MainActor.run {
                 self.errorMessage = "Failed to report post: \(error.localizedDescription)"
+                self.showError = true
+            }
+        }
+    }
+    
+    // MARK: - Block User
+    private func blockUser(_ userIDToBlock: String) async {
+        guard let currentUserID = userDataManager.profile.userID else {
+            await MainActor.run {
+                self.errorMessage = "Please log in to block users."
+                self.showError = true
+            }
+            return
+        }
+        
+        do {
+            try await FirebaseService.shared.blockUser(userID: currentUserID, userIDToBlock: userIDToBlock)
+            
+            // Reload user profile to get updated blockedUsers list
+            if let userID = userDataManager.profile.userID {
+                do {
+                    let updatedProfile = try await FirebaseService.shared.getUserProfile(userID: userID)
+                    await MainActor.run {
+                        if let profile = updatedProfile {
+                            userDataManager.profile = profile
+                        }
+                    }
+                } catch {
+                    print("Error reloading profile after block: \(error)")
+                }
+            }
+            
+            await MainActor.run {
+                // Reload comments to filter out blocked user
+                Task { await loadComments() }
+                // Also reload posts if needed
+                Task { await refreshPost() }
+            }
+        } catch {
+            await MainActor.run {
+                self.errorMessage = "Failed to block user: \(error.localizedDescription)"
                 self.showError = true
             }
         }

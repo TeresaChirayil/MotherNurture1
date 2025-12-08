@@ -235,11 +235,35 @@ struct ForumView: View {
                 .environmentObject(userDataManager)
             }
             .task {
+                // Reload profile to get latest blocked users
+                if let userID = userDataManager.profile.userID {
+                    do {
+                        if let updatedProfile = try await FirebaseService.shared.getUserProfile(userID: userID) {
+                            await MainActor.run {
+                                userDataManager.profile = updatedProfile
+                            }
+                        }
+                    } catch {
+                        print("Error reloading profile: \(error)")
+                    }
+                }
                 await loadPosts()
                 await loadLikedPosts()
             }
             .onAppear {
                 Task {
+                    // Reload profile to get latest blocked users
+                    if let userID = userDataManager.profile.userID {
+                        do {
+                            if let updatedProfile = try await FirebaseService.shared.getUserProfile(userID: userID) {
+                                await MainActor.run {
+                                    userDataManager.profile = updatedProfile
+                                }
+                            }
+                        } catch {
+                            print("Error reloading profile: \(error)")
+                        }
+                    }
                     await loadPosts()
                     await loadLikedPosts()
                 }
@@ -316,8 +340,17 @@ struct ForumView: View {
                 fetchedPosts = try await FirebaseService.shared.fetchPopularPosts()
             }
             
+            // Filter out posts from blocked users
+            var filteredPosts = fetchedPosts
+            if let currentUserID = userDataManager.profile.userID,
+               let blockedUsers = userDataManager.profile.blockedUsers {
+                filteredPosts = fetchedPosts.filter { post in
+                    !blockedUsers.contains(post.authorID)
+                }
+            }
+            
             await MainActor.run {
-                self.posts = fetchedPosts
+                self.posts = filteredPosts
                 self.isLoading = false
             }
         } catch {

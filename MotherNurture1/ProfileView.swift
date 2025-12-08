@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import FirebaseAuth
 
 struct ProfileView: View {
     @EnvironmentObject var userDataManager: UserDataManager
@@ -17,6 +18,14 @@ struct ProfileView: View {
     @State private var selectedImage: UIImage? = nil
     @State private var isSaving = false
     @State private var isLoading = false
+    @State private var showLogoutAlert = false
+    @State private var showDeleteProfileAlert = false
+    @State private var isDeleting = false
+    @State private var showDatePicker = false
+    @State private var editedDateOfBirth: Date = Date()
+    @State private var originalPhotoURL: String? = nil
+
+    
     
     let parentTags = [
         "First-time Parent",
@@ -48,8 +57,28 @@ struct ProfileView: View {
                     VStack(spacing: 0) {
                         // Top Navigation - Edit Button
                         HStack {
+                            // Sign Out Button
+                            HStack(spacing: 12) {
+                                Button(action: { showLogoutAlert = true }) {
+                                    HStack {
+                                        Image(systemName: "rectangle.portrait.and.arrow.right")
+                                        Text("Sign Out")
+                                    }
+                                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                                    .foregroundColor(.red)
+                                }
+                                .alert("Are you sure you want to sign out?", isPresented: $showLogoutAlert) {
+                                    Button("Cancel", role: .cancel) { }
+                                    Button("Sign Out", role: .destructive) {
+                                        signOut()
+                                    }
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                            }
+
                             Spacer()
-                            
+
+                            // Existing Edit/Save button
                             Button(action: {
                                 if isEditing {
                                     saveProfile()
@@ -73,6 +102,10 @@ struct ProfileView: View {
                             .buttonStyle(PlainButtonStyle())
                             .disabled(isSaving)
                         }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 20)
+                        .padding(.bottom, 20)
+
                         .padding(.horizontal, 20)
                         .padding(.top, 20)
                         .padding(.bottom, 20)
@@ -137,10 +170,62 @@ struct ProfileView: View {
                            let lastName = userDataManager.profile.lastName {
                             let fullName = "\(firstName) \(lastName)"
                             let age = calculateAge()
-                            Text("\(fullName)\(age != nil ? ", \(age!)" : "")")
-                                .font(.system(size: 24, weight: .bold, design: .rounded))
-                                .foregroundColor(Color(hex: "5C3D2E"))
-                                .padding(.bottom, 24)
+                            
+                            VStack(spacing: 8) {
+                                Text(fullName)
+                                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                                    .foregroundColor(Color(hex: "5C3D2E"))
+                                
+                                if isEditing {
+                                    VStack(spacing: 8) {
+                                        HStack(spacing: 8) {
+                                            Text("Date of Birth:")
+                                                .font(.system(size: 16, design: .rounded))
+                                                .foregroundColor(Color(hex: "5C3D2E"))
+                                            
+                                            Spacer()
+                                            
+                                            Button(action: {
+                                                showDatePicker.toggle()
+                                            }) {
+                                                Text(dateFormatter.string(from: editedDateOfBirth))
+                                                    .font(.system(size: 16, weight: .medium, design: .rounded))
+                                                    .foregroundColor(Color(hex: "8B9A7E"))
+                                                    .padding(.horizontal, 12)
+                                                    .padding(.vertical, 6)
+                                                    .background(Color(hex: "D4C4B0"))
+                                                    .cornerRadius(8)
+                                            }
+                                        }
+                                        .padding(.horizontal, 20)
+                                        
+                                        if showDatePicker {
+                                            DatePicker(
+                                                "Date of Birth",
+                                                selection: $editedDateOfBirth,
+                                                displayedComponents: .date
+                                            )
+                                            .datePickerStyle(.compact)
+                                            .accentColor(Color(hex: "5C3D2E"))
+                                            .padding(.horizontal, 20)
+                                        }
+                                        
+                                        if let calculatedAge = calculateAge(from: editedDateOfBirth) {
+                                            Text("Age: \(calculatedAge)")
+                                                .font(.system(size: 14, design: .rounded))
+                                                .foregroundColor(Color(hex: "8B9A7E"))
+                                                .padding(.horizontal, 20)
+                                        }
+                                    }
+                                } else {
+                                    if let age = age {
+                                        Text("Age: \(age)")
+                                            .font(.system(size: 16, design: .rounded))
+                                            .foregroundColor(Color(hex: "8B9A7E"))
+                                    }
+                                }
+                            }
+                            .padding(.bottom, 24)
                         }
                         
                         // Bio Section
@@ -338,6 +423,40 @@ struct ProfileView: View {
                     }
                 }
                 .overlay(alignment: .bottom) {
+                    VStack(spacing: 8) {
+                        Button(action: { showDeleteProfileAlert = true }) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "trash")
+                                Text("Delete Account")
+                            }
+                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .foregroundColor(.red)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color.red.opacity(0.08))
+                            .cornerRadius(10)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isDeleting)
+                        .alert("Delete Account", isPresented: $showDeleteProfileAlert) {
+                            Button("Cancel", role: .cancel) { }
+                            Button("Delete", role: .destructive) {
+                                deleteProfile()
+                            }
+                        } message: {
+                            Text("Are you sure you want to delete your account? This action cannot be undone. Your profile will be permanently deleted.")
+                        }
+                        
+                        // Safe-area padding at the bottom
+                        Color.clear
+                            .frame(height: 6)
+                    }
+                    .padding(.bottom, 12)
+                    .padding(.horizontal, 20)
+                    .background(
+                        Color(hex: "F8F5EE").opacity(0.95)
+                            .ignoresSafeArea(edges: .bottom)
+                    )
                 }
                 .toolbar(.hidden, for: .navigationBar)
                 .sheet(isPresented: $showingImagePicker) {
@@ -375,6 +494,22 @@ struct ProfileView: View {
         isLoading = false
     }
     
+    // MARK: - Sign Out
+    private func signOut() {
+        do {
+            try Auth.auth().signOut()
+            userDataManager.clearProfile()
+
+            // Trigger redirect — tell the app the user is now logged out
+            userDataManager.isAuthenticated = false
+
+            print("Signed out successfully")
+        } catch {
+            print("Error signing out: \(error.localizedDescription)")
+        }
+    }
+
+
     private func calculateAge() -> Int? {
         guard let dateOfBirth = userDataManager.profile.dateOfBirth else { return nil }
         let calendar = Calendar.current
@@ -387,6 +522,9 @@ struct ProfileView: View {
             editedBio = userDataManager.profile.shortDescription ?? ""
             editedParentTags = Set(userDataManager.profile.parentTags ?? [])
             editedInterests = Set(userDataManager.profile.interests ?? [])
+            editedDateOfBirth = userDataManager.profile.dateOfBirth ?? Date()
+            originalPhotoURL = userDataManager.profile.photoURL // Preserve original photoURL
+            selectedImage = nil // Clear any previously selected image
         }
         isEditing = true
     }
@@ -398,28 +536,82 @@ struct ProfileView: View {
         userDataManager.profile.shortDescription = editedBio.isEmpty ? nil : editedBio
         userDataManager.profile.parentTags = Array(editedParentTags)
         userDataManager.profile.interests = Array(editedInterests)
+        userDataManager.profile.dateOfBirth = editedDateOfBirth
         
-        // If an image was selected, save it (for now as placeholder URL)
+        // Handle profile picture: preserve existing photoURL if no new image selected
+        // If a new image was selected, save it (for now as placeholder URL)
         // In production, you'd upload to Firebase Storage and get a URL
         if let _ = selectedImage {
-            userDataManager.profile.photoURL = "selected_image_\(UUID().uuidString)"
-            print("🔥 [ProfileView] Selected image will be saved to profile")
+            // Only update photoURL if a new image was selected
+            // This preserves the existing photoURL if user didn't change the image
+            let newPhotoURL = "selected_image_\(UUID().uuidString)"
+            userDataManager.profile.photoURL = newPhotoURL
+            print("🔥 [ProfileView] New image selected, saving to profile")
+        } else {
+            // If no new image selected, preserve the original photoURL
+            userDataManager.profile.photoURL = originalPhotoURL
         }
         
         // Save to Firebase
         Task {
             do {
                 try await userDataManager.saveToFirebase()
-                isSaving = false
-                isEditing = false
+                await MainActor.run {
+                    // Clear selectedImage after successful save so photoURL persists
+                    selectedImage = nil
+                    isSaving = false
+                    isEditing = false
+                }
             } catch {
                 print("Error saving profile: \(error)")
-                isSaving = false
-                // Still exit edit mode even if save fails
-                isEditing = false
+                await MainActor.run {
+                    isSaving = false
+                    // Still exit edit mode even if save fails
+                    isEditing = false
+                }
             }
         }
     }
+    
+    private func deleteProfile() {
+        guard let userID = userDataManager.profile.userID else {
+            print("❌ Cannot delete profile: No userID")
+            return
+        }
+        
+        isDeleting = true
+        Task {
+            do {
+                // Delete profile from Firebase
+                try await FirebaseService.shared.deleteUserProfile(userID: userID)
+                
+                // Sign out and clear local data
+                await MainActor.run {
+                    signOut()
+                    isDeleting = false
+                }
+            } catch {
+                print("Error deleting profile: \(error)")
+                await MainActor.run {
+                    isDeleting = false
+                }
+            }
+        }
+    }
+    
+    private func calculateAge(from date: Date) -> Int? {
+        let calendar = Calendar.current
+        let ageComponents = calendar.dateComponents([.year], from: date, to: Date())
+        return ageComponents.year
+    }
+    
+    private var dateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d, yyyy"
+        return formatter
+    }
+    
+    
     
     // Flow Layout for wrapping tags
     struct FlowLayout: Layout {
