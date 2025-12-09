@@ -423,18 +423,12 @@ struct ProfileView: View {
                     }
                 }
                 .overlay(alignment: .bottom) {
-                    VStack(spacing: 8) {
+                    VStack(spacing: 0) {
+                        Spacer()
                         Button(action: { showDeleteProfileAlert = true }) {
-                            HStack(spacing: 6) {
-                                Image(systemName: "trash")
-                                Text("Delete Account")
-                            }
-                            .font(.system(size: 14, weight: .semibold, design: .rounded))
-                            .foregroundColor(.red)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(Color.red.opacity(0.08))
-                            .cornerRadius(10)
+                            Text("Delete Account")
+                                .font(.system(size: 12, weight: .regular, design: .rounded))
+                                .foregroundColor(.red.opacity(0.7))
                         }
                         .buttonStyle(.plain)
                         .disabled(isDeleting)
@@ -446,17 +440,8 @@ struct ProfileView: View {
                         } message: {
                             Text("Are you sure you want to delete your account? This action cannot be undone. Your profile will be permanently deleted.")
                         }
-                        
-                        // Safe-area padding at the bottom
-                        Color.clear
-                            .frame(height: 6)
+                        .padding(.bottom, 20)
                     }
-                    .padding(.bottom, 12)
-                    .padding(.horizontal, 20)
-                    .background(
-                        Color(hex: "F8F5EE").opacity(0.95)
-                            .ignoresSafeArea(edges: .bottom)
-                    )
                 }
                 .toolbar(.hidden, for: .navigationBar)
                 .sheet(isPresented: $showingImagePicker) {

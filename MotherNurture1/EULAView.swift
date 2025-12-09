@@ -265,3 +265,4 @@ private struct ScrollOffsetPreferenceKey: PreferenceKey {
     EULAView(isPresented: .constant(true), hasAccepted: .constant(false))
 }
 
+

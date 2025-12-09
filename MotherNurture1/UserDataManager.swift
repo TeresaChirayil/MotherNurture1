@@ -20,8 +20,9 @@ class UserDataManager: ObservableObject {
     
     private init() {
         self.profile = UserProfile()
-        // Check if user is already authenticated on init
-        checkAuthStatus()
+        // Start with isAuthenticated = false to always show login screen
+        // User must explicitly log in through ContentView
+        self.isAuthenticated = false
     }
     
     private func checkAuthStatus() {

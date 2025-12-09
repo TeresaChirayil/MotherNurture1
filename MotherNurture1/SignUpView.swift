@@ -281,17 +281,32 @@ struct SignUpView: View {
                 print("📧 Email: \(trimmedEmail)")
                 
                 // Check if email already exists
+                // Note: This requires authentication, so we'll authenticate anonymously first if needed
                 print("🔍 Step 1: Checking if email exists...")
-                let emailExists = await userDataManager.profileExists(email: trimmedEmail)
-                if emailExists {
-                    print("❌ Email already exists")
-                    await MainActor.run {
-                        isSubmitting = false
-                        validationError = "An account with this email already exists. Please log in instead."
+                do {
+                    // Ensure we're authenticated before checking email
+                    if !FirebaseService.shared.isAuthenticated() {
+                        print("⚠️ Not authenticated, signing in anonymously for email check...")
+                        _ = try await FirebaseService.shared.signInAnonymously()
+                        // Small delay to ensure auth state is established
+                        try? await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
                     }
-                    return
+                    
+                    let emailExists = await userDataManager.profileExists(email: trimmedEmail)
+                    if emailExists {
+                        print("❌ Email already exists")
+                        await MainActor.run {
+                            isSubmitting = false
+                            validationError = "An account with this email already exists. Please log in instead."
+                        }
+                        return
+                    }
+                    print("✅ Email is available")
+                } catch {
+                    print("⚠️ Error checking email existence (continuing with sign up): \(error)")
+                    // Continue with sign up even if email check fails
+                    // The save operation will handle duplicate email errors
                 }
-                print("✅ Email is available")
                 
                 // Sign out any existing session before creating new account
                 print("🔍 Step 2: Checking for existing authentication...")
@@ -307,6 +322,34 @@ struct SignUpView: View {
                     }
                 } else {
                     print("✅ No existing session")
+                }
+                
+                // Now sign in anonymously for the new account
+                print("🔍 Step 2.5: Signing in anonymously for new account...")
+                do {
+                    let newUserID = try await FirebaseService.shared.signInAnonymously()
+                    print("✅ Signed in anonymously with ID: \(newUserID)")
+                    // Small delay to ensure auth state is established
+                    try? await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
+                } catch {
+                    print("❌ Failed to sign in anonymously: \(error)")
+                    await MainActor.run {
+                        isSubmitting = false
+                        if let nsError = error as NSError?,
+                           nsError.domain.contains("FIRAuthErrorDomain") || nsError.domain.contains("Auth"),
+                           let authErrorCode = AuthErrorCode(rawValue: nsError.code) {
+                            if authErrorCode == .operationNotAllowed {
+                                validationError = "Anonymous authentication is not enabled. Please enable it in Firebase Console: Authentication → Sign-in method → Anonymous"
+                            } else if authErrorCode == .networkError {
+                                validationError = "Network error. Please check your internet connection and try again."
+                            } else {
+                                validationError = "Authentication error. Please try again."
+                            }
+                        } else {
+                            validationError = "Failed to create account. Please try again."
+                        }
+                    }
+                    return
                 }
                 
                 // Ensure profile data is set before saving
@@ -366,27 +409,32 @@ struct SignUpView: View {
                 
                 await MainActor.run {
                     isSubmitting = false
-                    let errorMessage = error.localizedDescription
+                    let errorMessage = error.localizedDescription.lowercased()
                     
                     // Check for specific Firebase Auth and Firestore errors
                     let nsError = error as NSError
+                    
+                    // Firebase Auth errors
                     if nsError.domain.contains("FIRAuthErrorDomain") || nsError.domain.contains("Auth") {
                         if let authErrorCode = AuthErrorCode(rawValue: nsError.code) {
-                            if authErrorCode == .operationNotAllowed {
+                            switch authErrorCode {
+                            case .operationNotAllowed:
                                 validationError = "Anonymous authentication is not enabled. Please enable it in Firebase Console: Authentication → Sign-in method → Anonymous"
-                            } else if authErrorCode == .networkError {
+                            case .networkError:
                                 validationError = "Network error. Please check your internet connection and try again."
-                            } else if authErrorCode == .internalError {
-                                // Replace generic message with guidance
+                            case .internalError:
                                 validationError = "Authentication error. Please verify Anonymous sign-in is enabled and try again."
-                            } else {
-                                validationError = "Authentication error (code: \(authErrorCode.rawValue)). Please check the console for details."
+                            case .emailAlreadyInUse:
+                                validationError = "An account with this email already exists. Please log in instead."
+                            default:
+                                validationError = "Sign up failed. Please try again. If the problem persists, check your internet connection."
                             }
                         } else {
-                            validationError = "Authentication error (code: \(nsError.code)). Please check the console for details."
+                            validationError = "Sign up failed. Please try again. If the problem persists, check your internet connection."
                         }
-                    } else if nsError.domain.contains("FIRFirestoreErrorDomain") {
-                        // Map Firestore errors clearly
+                    }
+                    // Firestore errors
+                    else if nsError.domain.contains("FIRFirestoreErrorDomain") {
                         switch nsError.code {
                         case 7:
                             validationError = "Permission denied. Check your Firestore security rules for /users/{userId}."
@@ -395,16 +443,19 @@ struct SignUpView: View {
                         case 13:
                             validationError = "Firestore internal error. This may be temporary. Try again later."
                         default:
-                            validationError = "Firestore error (code: \(nsError.code)). See console for details."
+                            validationError = "Failed to save profile. Please try again."
                         }
-                    } else if errorMessage.localizedCaseInsensitiveContains("network") {
+                    }
+                    // Generic error messages
+                    else if errorMessage.contains("network") || errorMessage.contains("unavailable") {
                         validationError = "Network error. Please check your connection and try again."
-                    } else if errorMessage.localizedCaseInsensitiveContains("permission") || errorMessage.localizedCaseInsensitiveContains("insufficient") {
+                    } else if errorMessage.contains("permission") || errorMessage.contains("insufficient") {
                         validationError = "Permission denied. Please check your Firebase security rules."
-                    } else if errorMessage.localizedCaseInsensitiveContains("already exists") || errorMessage.localizedCaseInsensitiveContains("already in use") {
+                    } else if errorMessage.contains("already exists") || errorMessage.contains("already in use") || errorMessage.contains("email") && errorMessage.contains("use") {
                         validationError = "An account with this email already exists. Please log in instead."
                     } else {
-                        validationError = "Failed to create account: \(errorMessage). Check console for details."
+                        // Generic fallback - never show "login failed" on sign up screen
+                        validationError = "Failed to create account. Please try again. If the problem persists, check your internet connection."
                     }
                 }
             }

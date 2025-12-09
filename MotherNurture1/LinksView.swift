@@ -271,17 +271,19 @@ public struct Profile: Identifiable, Equatable {
     let name: String
     let age: Int
     let location: String
-    let profilePicFileName: String
+    let profilePicFileName: String? // Optional: for asset names (legacy)
+    let profilePicURL: String? // Optional: for photo URLs from Firebase
     let bio: String
     let tags: [String]
     let groups: [String]
     
-    init(id: String = UUID().uuidString, name: String, age: Int, location: String, profilePicFileName: String, bio: String, tags: [String], groups: [String]) {
+    init(id: String = UUID().uuidString, name: String, age: Int, location: String, profilePicFileName: String? = nil, profilePicURL: String? = nil, bio: String, tags: [String], groups: [String]) {
         self.id = id
         self.name = name
         self.age = age
         self.location = location
         self.profilePicFileName = profilePicFileName
+        self.profilePicURL = profilePicURL
         self.bio = bio
         self.tags = tags
         self.groups = groups
@@ -296,6 +298,7 @@ let mockProfiles: [Profile] = [
         age: 29,
         location: "1.2 mi away",
         profilePicFileName: "SmilingMomWithDaugther",
+        profilePicURL: nil,
         bio: "Just moved to the area. Looking for a playdate partner and parenting book recommendations.",
         tags: ["New in Town", "Infant (6m)", "Book Lover", "Pumping"],
         groups: ["Get to Know Eachother!", "New Mom", "Mother of Children w/ Disabilities"]
@@ -306,6 +309,7 @@ let mockProfiles: [Profile] = [
         age: 25,
         location: "0.5 mi away",
         profilePicFileName: "MomWithPointingBaby",
+        profilePicURL: nil,
         bio: "SAHM running on fumes and cuddles. We love museums, baking, and quiet parks.",
         tags: ["Stay-at-Home", "Toddler (3)", "Baking Enthusiast"],
         groups: ["Get to Know Eachother!", "Expecting Moms"]
@@ -316,6 +320,7 @@ let mockProfiles: [Profile] = [
         age: 23,
         location: "5 mi away",
         profilePicFileName: "GrassGirl",
+        profilePicURL: nil,
         bio: "First-time mom navigating toddler tantrums. Coffee is my fuel! Looking for walking buddies and playground meetups.",
         tags: ["Working Mom", "Toddler (2)", "Loves Outdoors", "DIY & Crafts"],
         groups: ["Get to Know Eachother!", "New Moms"]
@@ -326,6 +331,7 @@ let mockProfiles: [Profile] = [
         age: 35,
         location: "7 mi away",
         profilePicFileName: "HappyMom",
+        profilePicURL: nil,
         bio: "Twin mom survivalist! Looking for someone to share cheap activity ideas. Send help (and coffee).",
         tags: ["Twin Mom", "Coffee Addict", "Budgeting"],
         groups: ["Get to Know Eachother!", "Single Moms"]
@@ -336,6 +342,7 @@ let mockProfiles: [Profile] = [
         age: 38,
         location: "8 mi away",
         profilePicFileName: "ExtremelyHappyLady",
+        profilePicURL: nil,
         bio: "Veteran mom of three, finally getting back into yoga. Seeking advice on navigating middle school.",
         tags: ["School-age Kids", "Yoga & Wellness", "Car Pool Queen", "Single Mom"],
         groups: ["Get to Know Eachother!", "Single Moms", "Mother of Children w/ Disabilities"]
@@ -352,11 +359,40 @@ struct CardView: View {
         VStack(alignment: .leading, spacing: 0) {
             // Image Area: bold, full-width header at fixed height
             ZStack(alignment: .bottomLeading) {
-                Image(profile.profilePicFileName)
+                // Show photo from URL if available, otherwise asset name, otherwise green placeholder
+                if let photoURL = profile.profilePicURL, !photoURL.isEmpty {
+                    AsyncImage(url: URL(string: photoURL)) { phase in
+                        switch phase {
+                        case .empty:
+                            // Loading state - show green placeholder
+                            Color(hex: "9BA897")
+                                .frame(height: 350)
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .scaledToFill()
+                                .frame(height: 350)
+                                .clipped()
+                        case .failure:
+                            // Failed to load - show green placeholder
+                            Color(hex: "9BA897")
+                                .frame(height: 350)
+                        @unknown default:
+                            Color(hex: "9BA897")
+                                .frame(height: 350)
+                        }
+                    }
+                } else if let assetName = profile.profilePicFileName, !assetName.isEmpty {
+                    Image(assetName)
                     .resizable()
                     .scaledToFill()
                     .frame(height: 350)
                     .clipped()
+                } else {
+                    // No photo - show green placeholder
+                    Color(hex: "9BA897")
+                        .frame(height: 350)
+                }
 
                 // Overlay content with name/age, location, and bio snippet
                 VStack(alignment: .leading, spacing: 8) {
@@ -818,21 +854,22 @@ struct MatchmakingView: View {
             location = "Nearby"
         }
         
-        // Profile picture - use photoURL if available, otherwise use a default image
-        let profilePicFileName: String
+        // Profile picture - use photoURL if available and it's a real URL (not a placeholder)
+        // Placeholder URLs like "selected_image_..." should be treated as no photo
+        let profilePicURL: String?
         if let photoURL = userProfile.photoURL, !photoURL.isEmpty {
-            // For now, use a default image name. In production, you'd load the image from URL
-            profilePicFileName = "SmilingMomWithDaugther" // Default
-        } else {
-            // Cycle through available images based on userID hash
-            let imageNames = ["SmilingMomWithDaugther", "MomWithPointingBaby", "GrassGirl", "HappyMom", "ExtremelyHappyLady"]
-            if let userID = userProfile.userID {
-                let index = abs(userID.hashValue) % imageNames.count
-                profilePicFileName = imageNames[index]
+            // Only use it if it looks like a real URL (starts with http:// or https://)
+            // Placeholder UUIDs like "selected_image_..." will be treated as no photo
+            if photoURL.hasPrefix("http://") || photoURL.hasPrefix("https://") {
+                profilePicURL = photoURL
             } else {
-                profilePicFileName = "SmilingMomWithDaugther"
+                // It's a placeholder, treat as no photo
+                profilePicURL = nil
             }
+        } else {
+            profilePicURL = nil
         }
+        let profilePicFileName: String? = nil // Don't use default images - show green placeholder if no photoURL
         
         // Bio - use shortDescription or create one from interests
         let bio: String
@@ -888,6 +925,7 @@ struct MatchmakingView: View {
             age: age,
             location: location,
             profilePicFileName: profilePicFileName,
+            profilePicURL: profilePicURL,
             bio: bio,
             tags: tags,
             groups: groups
