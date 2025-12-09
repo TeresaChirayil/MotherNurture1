@@ -11,8 +11,7 @@
 ////    @Environment(\.dismiss) var dismiss
 ////    @EnvironmentObject var userDataManager: UserDataManager
 ////    @State private var description: String = ""
-////    @State private var navigateToChannels = false
-////    @State private var isSaving = false
+////////    @State private var isSaving = false
 ////    
 ////    var body: some View {
 ////        ZStack {
@@ -176,8 +175,7 @@
 //    @Environment(\.dismiss) var dismiss
 //    @EnvironmentObject var userDataManager: UserDataManager
 //    @State private var description: String = ""
-//    @State private var navigateToChannels = false
-//    @State private var isSaving = false
+////    @State private var isSaving = false
 //    @State private var showingImagePicker = false
 //    @State private var selectedImage: UIImage? = nil
 //    
@@ -355,7 +353,6 @@ struct FinalTouchView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var userDataManager: UserDataManager
     @State private var description: String = ""
-    @State private var navigateToChannels = false
     @State private var isSaving = false
     @State private var showingImagePicker = false
     @State private var selectedImage: UIImage? = nil
@@ -477,18 +474,25 @@ struct FinalTouchView: View {
                                 print("🔥 [FinalTouchView] Image selected, will save to profile")
                             }
                             
-                            // Save to Firebase
+                            // Save to Firebase and mark as authenticated (questionnaire complete)
                             isSaving = true
                             Task {
                                 do {
-                                    try await userDataManager.saveToFirebase()
-                                    isSaving = false
-                                    navigateToChannels = true
+                                    // Set authenticated to true now that questionnaire is complete
+                                    // This will cause the app root to switch to MainTabView automatically
+                                    try await userDataManager.saveToFirebase(setAuthenticated: true)
+                                    await MainActor.run {
+                                        isSaving = false
+                                        // Don't navigate manually - let the app root handle the transition
+                                        // The app will automatically switch to MainTabView when isAuthenticated becomes true
+                                    }
                                 } catch {
                                     print("Error saving to Firebase: \(error)")
-                                    isSaving = false
-                                    // Still navigate even if save fails
-                                    navigateToChannels = true
+                                    await MainActor.run {
+                                        isSaving = false
+                                        // Still set authenticated even if save fails, so user can proceed
+                                        userDataManager.isAuthenticated = true
+                                    }
                                 }
                             }
                         }) {
@@ -515,10 +519,7 @@ struct FinalTouchView: View {
                     .padding(.horizontal, 40)
                     .padding(.bottom, 40)
                 }
-                .navigationDestination(isPresented: $navigateToChannels) {
-                    ChannelsView()
-                        .environmentObject(userDataManager)
-                }
+                // Navigation is handled automatically by the app root when isAuthenticated becomes true
             }
             .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showingImagePicker) {

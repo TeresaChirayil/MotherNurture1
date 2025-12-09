@@ -55,48 +55,55 @@ struct ProfileView: View {
                 
                 ScrollView {
                     VStack(spacing: 0) {
-                        // Top Navigation - Edit Button
+                        // Top Navigation - Sign Out and Menu
                         HStack {
                             // Sign Out Button
-                            HStack(spacing: 12) {
-                                Button(action: { showLogoutAlert = true }) {
-                                    HStack {
-                                        Image(systemName: "rectangle.portrait.and.arrow.right")
-                                        Text("Sign Out")
-                                    }
-                                    .font(.system(size: 14, weight: .medium, design: .rounded))
-                                    .foregroundColor(.red)
+                            Button(action: { showLogoutAlert = true }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                                    Text("Sign Out")
                                 }
-                                .alert("Are you sure you want to sign out?", isPresented: $showLogoutAlert) {
-                                    Button("Cancel", role: .cancel) { }
-                                    Button("Sign Out", role: .destructive) {
-                                        signOut()
-                                    }
-                                }
-                                .buttonStyle(PlainButtonStyle())
+                                .font(.system(size: 14, weight: .medium, design: .rounded))
+                                .foregroundColor(.red)
                             }
+                            .alert("Are you sure you want to sign out?", isPresented: $showLogoutAlert) {
+                                Button("Cancel", role: .cancel) { }
+                                Button("Sign Out", role: .destructive) {
+                                    signOut()
+                                }
+                            }
+                            .buttonStyle(PlainButtonStyle())
 
                             Spacer()
 
-                            // Existing Edit/Save button
-                            Button(action: {
-                                if isEditing {
-                                    saveProfile()
-                                } else {
-                                    startEditing()
+                            // Menu Button (Edit and Delete Account)
+                            Menu {
+                                Button(action: {
+                                    if isEditing {
+                                        saveProfile()
+                                    } else {
+                                        startEditing()
+                                    }
+                                }) {
+                                    Label(isEditing ? "Save" : "Edit", systemImage: isEditing ? "checkmark" : "pencil")
                                 }
-                            }) {
+                                .disabled(isSaving)
+                                
+                                Divider()
+                                
+                                Button(role: .destructive, action: {
+                                    showDeleteProfileAlert = true
+                                }) {
+                                    Label("Delete Account", systemImage: "trash")
+                                }
+                            } label: {
                                 if isSaving {
                                     ProgressView()
                                         .tint(Color(hex: "5C3D2E"))
                                 } else {
-                                    Text(isEditing ? "Save" : "Edit")
-                                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                    Image(systemName: "ellipsis.circle")
+                                        .font(.system(size: 24, weight: .regular))
                                         .foregroundColor(Color(hex: "5C3D2E"))
-                                        .padding(.horizontal, 16)
-                                        .padding(.vertical, 8)
-                                        .background(Color(hex: "D4C4B0"))
-                                        .cornerRadius(8)
                                 }
                             }
                             .buttonStyle(PlainButtonStyle())
@@ -423,27 +430,18 @@ struct ProfileView: View {
                     }
                 }
                 .overlay(alignment: .bottom) {
-                    VStack(spacing: 0) {
-                        Spacer()
-                        Button(action: { showDeleteProfileAlert = true }) {
-                            Text("Delete Account")
-                                .font(.system(size: 12, weight: .regular, design: .rounded))
-                                .foregroundColor(.red.opacity(0.7))
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(isDeleting)
-                        .alert("Delete Account", isPresented: $showDeleteProfileAlert) {
-                            Button("Cancel", role: .cancel) { }
-                            Button("Delete", role: .destructive) {
-                                deleteProfile()
-                            }
-                        } message: {
-                            Text("Are you sure you want to delete your account? This action cannot be undone. Your profile will be permanently deleted.")
-                        }
-                        .padding(.bottom, 20)
-                    }
+                    BottomNavBar(currentTab: .constant(.profile))
+                        .padding(.bottom, 5)
                 }
                 .toolbar(.hidden, for: .navigationBar)
+                .alert("Delete Account", isPresented: $showDeleteProfileAlert) {
+                    Button("Cancel", role: .cancel) { }
+                    Button("Delete", role: .destructive) {
+                        deleteProfile()
+                    }
+                } message: {
+                    Text("Are you sure you want to delete your account? This action cannot be undone. All your data, including your profile, posts, and comments, will be permanently deleted.")
+                }
                 .sheet(isPresented: $showingImagePicker) {
                     ImagePicker(selectedImage: $selectedImage)
                 }
@@ -559,7 +557,7 @@ struct ProfileView: View {
     }
     
     private func deleteProfile() {
-        guard let userID = userDataManager.profile.userID else {
+        guard userDataManager.profile.userID != nil else {
             print("❌ Cannot delete profile: No userID")
             return
         }
@@ -567,18 +565,21 @@ struct ProfileView: View {
         isDeleting = true
         Task {
             do {
-                // Delete profile from Firebase
-                try await FirebaseService.shared.deleteUserProfile(userID: userID)
+                // Delete account using UserDataManager method
+                try await userDataManager.deleteAccount()
                 
-                // Sign out and clear local data
+                // Account deletion will automatically sign out and reset
                 await MainActor.run {
-                    signOut()
                     isDeleting = false
+                    print("✅ Account deleted successfully")
                 }
             } catch {
-                print("Error deleting profile: \(error)")
+                print("❌ Error deleting account: \(error.localizedDescription)")
                 await MainActor.run {
                     isDeleting = false
+                    // Show error alert to user
+                    showDeleteProfileAlert = false
+                    // You could add an error alert here if needed
                 }
             }
         }

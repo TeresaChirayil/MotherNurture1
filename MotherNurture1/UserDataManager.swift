@@ -32,7 +32,7 @@ class UserDataManager: ObservableObject {
         }
     }
     
-    func saveToFirebase() async throws {
+    func saveToFirebase(setAuthenticated: Bool = true) async throws {
         print("📝 Starting saveToFirebase...")
         print("Profile email: \(profile.email ?? "nil")")
         print("Profile userID: \(profile.userID ?? "nil")")
@@ -92,9 +92,11 @@ class UserDataManager: ObservableObject {
             // Ensure userID is set
             profile.userID = savedUserID
         
-            // Mark authenticated after a successful save
-            DispatchQueue.main.async {
-                self.isAuthenticated = true
+            // Mark authenticated after a successful save (only if setAuthenticated is true)
+            if setAuthenticated {
+                DispatchQueue.main.async {
+                    self.isAuthenticated = true
+                }
             }
             
             // Add user to their assigned channels in Firebase
@@ -198,5 +200,62 @@ class UserDataManager: ObservableObject {
         UserDefaults.standard.removeObject(forKey: "userProfile") // if you use this key
         
         // Add any additional cleanup (e.g., local caches) here.
+    }
+    
+    // -----------------------------------------------------
+    // MARK: - Delete Account
+    // -----------------------------------------------------
+    func deleteAccount() async throws {
+        guard let userID = profile.userID else {
+            throw NSError(
+                domain: "UserDataManager",
+                code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "No userID found. Cannot delete account."]
+            )
+        }
+        
+        print("🗑️ Starting account deletion for user: \(userID)")
+        
+        // Delete user profile from Firestore
+        try await firebaseService.deleteUserProfile(userID: userID)
+        print("✅ User profile deleted from Firestore")
+        
+        // Delete Firebase Auth account (if it exists and is not anonymous)
+        if let currentUser = Auth.auth().currentUser {
+            // For anonymous users, we can just sign out
+            // For email/password users, we need to delete the account
+            if !currentUser.isAnonymous {
+                do {
+                    try await currentUser.delete()
+                    print("✅ Firebase Auth account deleted")
+                } catch {
+                    print("⚠️ Could not delete Firebase Auth account: \(error.localizedDescription)")
+                    // Continue with sign out even if deletion fails
+                }
+            }
+            
+            // Sign out from Firebase Auth
+            try? firebaseService.signOut()
+        }
+        
+        // Clear local profile and reset authentication state on main thread
+        // This must happen on main thread for SwiftUI to observe the change
+        await MainActor.run {
+            // Clear profile first
+            self.profile = UserProfile()
+            
+            // Then set authentication to false - this triggers the app to show login screen
+            self.isAuthenticated = false
+            
+            print("✅ Authentication state reset")
+            print("   isAuthenticated: \(self.isAuthenticated)")
+            print("   profile.userID: \(self.profile.userID ?? "nil")")
+            print("   profile.email: \(self.profile.email ?? "nil")")
+        }
+        
+        // Small delay to ensure state propagation
+        try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+        
+        print("✅ Account deletion completed")
     }
 }
