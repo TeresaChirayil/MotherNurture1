@@ -32,7 +32,7 @@ class UserDataManager: ObservableObject {
         }
     }
     
-    func saveToFirebase() async throws {
+    func saveToFirebase(setAuthenticated: Bool = true) async throws {
         print("📝 Starting saveToFirebase...")
         print("Profile email: \(profile.email ?? "nil")")
         print("Profile userID: \(profile.userID ?? "nil")")
@@ -92,9 +92,11 @@ class UserDataManager: ObservableObject {
             // Ensure userID is set
             profile.userID = savedUserID
         
-            // Mark authenticated after a successful save
-            DispatchQueue.main.async {
-                self.isAuthenticated = true
+            // Mark authenticated after a successful save (only if setAuthenticated is true)
+            if setAuthenticated {
+                DispatchQueue.main.async {
+                    self.isAuthenticated = true
+                }
             }
             
             // Add user to their assigned channels in Firebase

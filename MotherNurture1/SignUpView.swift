@@ -370,8 +370,9 @@ struct SignUpView: View {
                 print("   ✅ CreatedAt: \(userDataManager.profile.createdAt != nil ? "set" : "nil")")
                 
                 // Save the profile to Firebase (this will authenticate anonymously if needed)
+                // Don't set isAuthenticated yet - wait until questionnaire is complete
                 print("🔍 Step 4: Saving to Firebase...")
-                try await userDataManager.saveToFirebase()
+                try await userDataManager.saveToFirebase(setAuthenticated: false)
                 print("✅ saveToFirebase completed successfully")
                 print("🎉 ========== SIGN UP SUCCESSFUL ==========")
                 
