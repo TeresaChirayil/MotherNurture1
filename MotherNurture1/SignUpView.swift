@@ -6,11 +6,8 @@
 //
 
 import SwiftUI
-<<<<<<< HEAD
-=======
 import FirebaseAuth
 import FirebaseFirestore
->>>>>>> amna
 
 struct SignUpView: View {
     @Environment(\.dismiss) var dismiss
@@ -19,12 +16,6 @@ struct SignUpView: View {
     @State private var lastName: String = ""
     @State private var dateOfBirth: Date = Date()
     @State private var email: String = ""
-<<<<<<< HEAD
-    @State private var phoneNumber: String = ""
-    @State private var showDatePicker: Bool = false
-    @State private var navigateToWelcome = false
-    
-=======
     @State private var showDatePicker: Bool = false
     @State private var navigateToWelcome = false
 
@@ -38,8 +29,6 @@ struct SignUpView: View {
     @State private var isSubmitting: Bool = false
     @State private var showEULA: Bool = false
     @State private var hasAcceptedEULA: Bool = false
-
->>>>>>> amna
     var body: some View {
         NavigationStack {
             ZStack {
@@ -139,13 +128,6 @@ struct SignUpView: View {
                             .textFieldStyle(SignUpTextFieldStyle())
                             .keyboardType(.emailAddress)
                             .autocapitalization(.none)
-<<<<<<< HEAD
-                        
-                        // Phone Number Field
-                        TextField("Phone Number", text: $phoneNumber)
-                            .textFieldStyle(SignUpTextFieldStyle())
-                            .keyboardType(.phonePad)
-=======
                             .disableAutocorrection(true)
 
                         // Create Password with Show/Hide
@@ -204,7 +186,6 @@ struct SignUpView: View {
                                 .foregroundColor(.red)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
->>>>>>> amna
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 10)
@@ -212,26 +193,6 @@ struct SignUpView: View {
                 }
                 
                 // Sign Up Button
-<<<<<<< HEAD
-                Button(action: {
-                    // Save sign-up data to UserDataManager
-                    userDataManager.profile.firstName = firstName.isEmpty ? nil : firstName
-                    userDataManager.profile.lastName = lastName.isEmpty ? nil : lastName
-                    userDataManager.profile.dateOfBirth = dateOfBirth
-                    userDataManager.profile.email = email.isEmpty ? nil : email
-                    userDataManager.profile.phoneNumber = phoneNumber.isEmpty ? nil : phoneNumber
-                    
-                    navigateToWelcome = true
-                }) {
-                    Text("Sign up")
-                        .font(.system(size: 18, weight: .semibold, design: .rounded))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 56)
-                        .background(Color(hex: "8B9A7E"))
-                        .cornerRadius(12)
-                }
-=======
                 Button(action: handleSignUpTapped) {
                     if isSubmitting {
                         ProgressView()
@@ -252,7 +213,6 @@ struct SignUpView: View {
                     }
                 }
                 .disabled(!canSubmit || isSubmitting)
->>>>>>> amna
                 .padding(.horizontal, 20)
                 .padding(.bottom, 30)
                 }
@@ -262,12 +222,9 @@ struct SignUpView: View {
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
-<<<<<<< HEAD
-=======
             .sheet(isPresented: $showEULA) {
                 EULAView(isPresented: $showEULA, hasAccepted: $hasAcceptedEULA)
             }
->>>>>>> amna
         }
     }
     
@@ -276,8 +233,6 @@ struct SignUpView: View {
         formatter.dateFormat = "MMM d, yyyy"
         return formatter
     }
-<<<<<<< HEAD
-=======
 
     private var canSubmit: Bool {
         // Basic checks; you can expand with email format checks as needed
@@ -543,7 +498,6 @@ private struct PasswordField: View {
         .background(Color(hex: "D4C4B0"))
         .cornerRadius(8)
     }
->>>>>>> amna
 }
 
 // Custom TextField Style for Sign Up
@@ -558,8 +512,6 @@ struct SignUpTextFieldStyle: TextFieldStyle {
     }
 }
 
-<<<<<<< HEAD
-=======
 // Helper extension for optional string
 extension Optional where Wrapped == String {
     var isNilOrEmpty: Bool {
@@ -567,14 +519,9 @@ extension Optional where Wrapped == String {
     }
 }
 
->>>>>>> amna
 #Preview {
     NavigationStack {
         SignUpView()
             .environmentObject(UserDataManager.shared)
     }
 }
-<<<<<<< HEAD
-
-=======
->>>>>>> amna

@@ -66,15 +66,12 @@ struct BottomNavBar: View {
             Spacer()
             
             // 👤 Profile
-<<<<<<< HEAD
-            NavigationLink(destination: ProfileView().environmentObject(UserDataManager.shared)) {
-=======
             Button(action: { currentTab = .profile }) {
->>>>>>> amna
                 Image(systemName: "person")
                     .font(.system(size: 24))
                     .foregroundColor(currentTab == .profile ? Color(hex: "8B9A7E") : Color(hex: "5C3D2E"))
             }
+            .buttonStyle(PlainButtonStyle())
             
             Spacer()
         }

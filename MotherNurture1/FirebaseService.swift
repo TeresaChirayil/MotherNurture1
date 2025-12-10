@@ -7,10 +7,7 @@
 
 import Foundation
 import FirebaseFirestore
-<<<<<<< HEAD
-=======
 import FirebaseAuth
->>>>>>> amna
 
 class FirebaseService {
 
@@ -18,8 +15,6 @@ class FirebaseService {
     let db = Firestore.firestore()
 
     private init() {}
-<<<<<<< HEAD
-=======
     
     // -----------------------------------------------------
     // MARK: - Authentication
@@ -95,28 +90,11 @@ class FirebaseService {
         try Auth.auth().signOut()
         print("✅ Signed out")
     }
->>>>>>> amna
 
     // -----------------------------------------------------
     // MARK: - Save User Profile
     // -----------------------------------------------------
     func saveUserProfile(_ profile: UserProfile) async throws -> String {
-<<<<<<< HEAD
-        var profileDict = profile.toDictionary()
-        profileDict["updatedAt"] = Timestamp(date: Date())
-
-        // Update if userID exists
-        if let userID = profile.userID {
-            try await db.collection("users").document(userID).setData(profileDict, merge: true)
-            print("✅ Updated existing user profile")
-            return userID
-        }
-
-        // Create a new document
-        let docRef = try await db.collection("users").addDocument(data: profileDict)
-        print("✅ Created new user profile")
-        return docRef.documentID
-=======
         print("💾 saveUserProfile called")
         print("   Profile userID: \(profile.userID ?? "nil")")
         print("   Profile email: \(profile.email ?? "nil")")
@@ -182,7 +160,6 @@ class FirebaseService {
             print("=============================================")
             throw error
         }
->>>>>>> amna
     }
 
     // -----------------------------------------------------
@@ -201,8 +178,6 @@ class FirebaseService {
         try await db.collection("users").document(userID).setData(profileDict, merge: true)
         print("✅ Successfully updated profile")
     }
-<<<<<<< HEAD
-=======
     
     // -----------------------------------------------------
     // MARK: - Delete User Profile
@@ -227,7 +202,6 @@ class FirebaseService {
         // Note: We don't delete the user's posts/comments automatically
         // You may want to add cascade deletion logic if needed
     }
->>>>>>> amna
 
     // -----------------------------------------------------
     // MARK: - Fetch User Profile
@@ -258,8 +232,6 @@ class FirebaseService {
     func loadUserProfile(userID: String) async throws -> UserProfile? {
         return try await getUserProfile(userID: userID)
     }
-<<<<<<< HEAD
-=======
     
     // -----------------------------------------------------
     // MARK: - Fetch All User Profiles (for matchmaking)
@@ -285,7 +257,6 @@ class FirebaseService {
         print("✅ Fetched \(profiles.count) user profiles for matchmaking")
         return profiles
     }
->>>>>>> amna
 
     // -----------------------------------------------------
     // MARK: - Add User to Channel
@@ -347,19 +318,13 @@ class FirebaseService {
         profile.shortDescription = data["shortDescription"] as? String
         profile.photoURL = data["photoURL"] as? String
         profile.channelMemberships = data["channelMemberships"] as? [String]
-<<<<<<< HEAD
-=======
         profile.blockedUsers = data["blockedUsers"] as? [String]
->>>>>>> amna
 
         profile.createdAt = data["createdAt"] as? Timestamp
         profile.updatedAt = data["updatedAt"] as? Timestamp
 
         return profile
     }
-<<<<<<< HEAD
-}
-=======
     
     // -----------------------------------------------------
     // MARK: - Forum Posts
@@ -686,4 +651,3 @@ extension FirebaseService {
     }
 }
 
->>>>>>> amna

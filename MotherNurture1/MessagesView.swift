@@ -7,9 +7,12 @@ import SwiftUI
 
 struct MessagesView: View {
     @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var userDataManager: UserDataManager
     let channel: Channel
     
     @State private var newMessage: String = ""
+    @State private var showBlockConfirmation = false
+    @State private var showReportConfirmation = false
     
     struct ChatMessage: Identifiable {
         let id = UUID()
@@ -21,6 +24,10 @@ struct MessagesView: View {
         ChatMessage(text: "Welcome to the chat!", isUser: false),
         ChatMessage(text: "Feel free to share your experiences here.", isUser: false)
     ]
+    
+    private var canBlockOrReport: Bool {
+        channel.isDirectMessage // Only allow block/report for direct messages
+    }
     
     var body: some View {
         ZStack {
@@ -38,6 +45,26 @@ struct MessagesView: View {
                         .font(.system(size: 18, weight: .bold, design: .rounded))
                         .foregroundColor(Color(hex: "5C3D2E"))
                     Spacer()
+                    
+                    if canBlockOrReport {
+                        Menu {
+                            Button(role: .destructive, action: {
+                                showBlockConfirmation = true
+                            }) {
+                                Label("Block User", systemImage: "person.crop.circle.badge.xmark")
+                            }
+                            
+                            Button(role: .destructive, action: {
+                                showReportConfirmation = true
+                            }) {
+                                Label("Report User/Content", systemImage: "flag")
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis")
+                                .foregroundColor(Color(hex: "5C3D2E"))
+                                .font(.system(size: 18, weight: .medium))
+                        }
+                    }
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 16)
@@ -102,6 +129,22 @@ struct MessagesView: View {
             }
         }
         .navigationBarBackButtonHidden(true)
+        .confirmationDialog("Block User", isPresented: $showBlockConfirmation, titleVisibility: .visible) {
+            Button("Block", role: .destructive) {
+                Task { await blockUser() }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Block \(channel.name)? You won't see their messages anymore.")
+        }
+        .confirmationDialog("Report User/Content", isPresented: $showReportConfirmation, titleVisibility: .visible) {
+            Button("Report", role: .destructive) {
+                reportUser()
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Report this user or content for inappropriate behavior?")
+        }
     }
     
     private func sendMessage() {
@@ -110,6 +153,60 @@ struct MessagesView: View {
             messages.append(ChatMessage(text: newMessage, isUser: true))
             newMessage = ""
         }
+    }
+    
+    private func blockUser() async {
+        guard let currentUserID = userDataManager.profile.userID else { return }
+        
+        // For direct messages, we need to find the user ID from the channel name
+        // The channel name should match the user's name (firstName + lastName)
+        // We'll search for a user profile matching this name
+        var userIDToBlock: String? = nil
+        
+        do {
+            // Fetch all user profiles and find one matching the channel name
+            let allProfiles = try await FirebaseService.shared.fetchAllUserProfiles(excludingUserID: currentUserID, limit: 100)
+            
+            // Try to find a user whose full name matches the channel name
+            for profile in allProfiles {
+                let fullName = "\(profile.firstName ?? "") \(profile.lastName ?? "")".trimmingCharacters(in: .whitespaces)
+                if fullName == channel.name || profile.firstName == channel.name {
+                    userIDToBlock = profile.userID
+                    break
+                }
+            }
+            
+            // If we found the user, block them
+            if let userID = userIDToBlock {
+                try await FirebaseService.shared.blockUser(userID: currentUserID, userIDToBlock: userID)
+                
+                // Reload user profile to get updated blockedUsers list
+                if let userID = userDataManager.profile.userID {
+                    do {
+                        let updatedProfile = try await FirebaseService.shared.getUserProfile(userID: userID)
+                        await MainActor.run {
+                            if let profile = updatedProfile {
+                                userDataManager.profile = profile
+                            }
+                        }
+                    } catch {
+                        print("Error reloading profile after block: \(error)")
+                    }
+                }
+                
+                print("✅ Successfully blocked user: \(channel.name)")
+            } else {
+                print("⚠️ Could not find user with name: \(channel.name)")
+                // Note: In a production app, you might want to show an alert to the user
+            }
+        } catch {
+            print("Error blocking user: \(error)")
+        }
+    }
+    
+    private func reportUser() {
+        let channelID = channel.id.uuidString
+        MailHelper.reportMessage(channelID: channelID, channelName: channel.name, userName: channel.name)
     }
 }
 

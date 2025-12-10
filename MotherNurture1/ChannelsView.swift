@@ -1,24 +1,15 @@
 import SwiftUI
 
 struct ChannelsView: View {
+    @EnvironmentObject var userDataManager: UserDataManager
     @ObservedObject private var channelsManager = ChannelsManager.shared
     @State private var searchText: String = ""
     @State private var showCreateChannel = false
     @State private var selectedChannel: Channel? = nil  // ← for navigation
-<<<<<<< HEAD
-    @State private var channels: [Channel] = [
-        Channel(name: "Candence Smith", timeAgo: "1h", isDirectMessage: true),
-        Channel(name: "Get to Know Each Other!", timeAgo: "2h"),
-        Channel(name: "Mothers of Children with Disabilities", timeAgo: "4h"),
-        Channel(name: "Expecting Moms", timeAgo: "6h"),
-        Channel(name: "Single Moms", timeAgo: "8h")
-    ]
-=======
     
     private var channels: [Channel] {
         channelsManager.channels
     }
->>>>>>> amna
     
     var body: some View {
         NavigationStack {
@@ -118,17 +109,14 @@ struct ChannelsView: View {
                     isPresented: $showCreateChannel,
                     onSave: { channelName, description, category, type in
                         let newChannel = Channel(name: channelName, timeAgo: "0h", isDirectMessage: false)
-<<<<<<< HEAD
-                        channels.append(newChannel)
-=======
                         channelsManager.addChannel(newChannel)
->>>>>>> amna
                     }
                 )
             }
             // ✅ Navigation to Messages screen
             .navigationDestination(item: $selectedChannel) { channel in
                 MessagesView(channel: channel)
+                    .environmentObject(userDataManager)
             }
         }
     }

@@ -6,10 +6,7 @@
 //
 
 import SwiftUI
-<<<<<<< HEAD
-=======
 import FirebaseAuth
->>>>>>> amna
 
 struct ProfileView: View {
     @EnvironmentObject var userDataManager: UserDataManager
@@ -18,10 +15,6 @@ struct ProfileView: View {
     @State private var editedParentTags: Set<String> = []
     @State private var editedInterests: Set<String> = []
     @State private var showingImagePicker = false
-<<<<<<< HEAD
-    @State private var isSaving = false
-    @State private var isLoading = false
-=======
     @State private var selectedImage: UIImage? = nil
     @State private var isSaving = false
     @State private var isLoading = false
@@ -31,9 +24,6 @@ struct ProfileView: View {
     @State private var showDatePicker = false
     @State private var editedDateOfBirth: Date = Date()
     @State private var originalPhotoURL: String? = nil
-
-    
->>>>>>> amna
     
     let parentTags = [
         "First-time Parent",
@@ -65,10 +55,6 @@ struct ProfileView: View {
                     VStack(spacing: 0) {
                         // Top Navigation - Edit Button
                         HStack {
-<<<<<<< HEAD
-                            Spacer()
-                            
-=======
                             // Sign Out Button
                             HStack(spacing: 12) {
                                 Button(action: { showLogoutAlert = true }) {
@@ -91,7 +77,6 @@ struct ProfileView: View {
                             Spacer()
 
                             // Existing Edit/Save button
->>>>>>> amna
                             Button(action: {
                                 if isEditing {
                                     saveProfile()
@@ -118,13 +103,6 @@ struct ProfileView: View {
                         .padding(.horizontal, 20)
                         .padding(.top, 20)
                         .padding(.bottom, 20)
-<<<<<<< HEAD
-=======
-
-                        .padding(.horizontal, 20)
-                        .padding(.top, 20)
-                        .padding(.bottom, 20)
->>>>>>> amna
                         
                         // Profile Picture
                         ZStack {
@@ -136,9 +114,6 @@ struct ProfileView: View {
                                         .stroke(Color.white, lineWidth: 3)
                                 )
                             
-<<<<<<< HEAD
-                            if let photoURL = userDataManager.profile.photoURL, !photoURL.isEmpty {
-=======
                             // Show selected image, then photoURL, then placeholder
                             if let selectedImage = selectedImage {
                                 Image(uiImage: selectedImage)
@@ -147,7 +122,6 @@ struct ProfileView: View {
                                     .frame(width: 120, height: 120)
                                     .clipShape(Circle())
                             } else if let photoURL = userDataManager.profile.photoURL, !photoURL.isEmpty {
->>>>>>> amna
                                 AsyncImage(url: URL(string: photoURL)) { image in
                                     image
                                         .resizable()
@@ -179,10 +153,7 @@ struct ProfileView: View {
                                             .font(.system(size: 18))
                                     }
                                 }
-<<<<<<< HEAD
-=======
                                 .buttonStyle(PlainButtonStyle())
->>>>>>> amna
                                 .offset(x: 40, y: 40)
                             }
                         }
@@ -193,12 +164,6 @@ struct ProfileView: View {
                            let lastName = userDataManager.profile.lastName {
                             let fullName = "\(firstName) \(lastName)"
                             let age = calculateAge()
-<<<<<<< HEAD
-                            Text("\(fullName)\(age != nil ? ", \(age!)" : "")")
-                                .font(.system(size: 24, weight: .bold, design: .rounded))
-                                .foregroundColor(Color(hex: "5C3D2E"))
-                                .padding(.bottom, 24)
-=======
                             
                             VStack(spacing: 8) {
                                 Text(fullName)
@@ -255,7 +220,6 @@ struct ProfileView: View {
                                 }
                             }
                             .padding(.bottom, 24)
->>>>>>> amna
                         }
                         
                         // Bio Section
@@ -453,24 +417,6 @@ struct ProfileView: View {
                     }
                 }
                 .overlay(alignment: .bottom) {
-<<<<<<< HEAD
-                    BottomNavBar(currentTab: .constant(.profile))
-                        .padding(.bottom, 5)
-                }
-            }
-            .toolbar(.hidden, for: .navigationBar)
-            .sheet(isPresented: $showingImagePicker) {
-                // Image picker would go here
-                Text("Image Picker Placeholder")
-            }
-            .task {
-                // Load profile from Firebase when view appears
-                await loadProfileIfNeeded()
-            }
-            .refreshable {
-                // Allow pull-to-refresh to reload profile
-                await loadProfileIfNeeded()
-=======
                     VStack(spacing: 0) {
                         Spacer()
                         Button(action: { showDeleteProfileAlert = true }) {
@@ -503,15 +449,11 @@ struct ProfileView: View {
                     // Allow pull-to-refresh to reload profile
                     await loadProfileIfNeeded()
                 }
->>>>>>> amna
             }
         }
     }
     
-<<<<<<< HEAD
-=======
     // MARK: - Private Functions
->>>>>>> amna
     private func loadProfileIfNeeded() async {
         // Load profile if we have a userID or email
         guard userDataManager.profile.userID != nil || (userDataManager.profile.email != nil && !userDataManager.profile.email!.isEmpty) else {
@@ -531,8 +473,6 @@ struct ProfileView: View {
         isLoading = false
     }
     
-<<<<<<< HEAD
-=======
     // MARK: - Sign Out
     private func signOut() {
         do {
@@ -548,8 +488,6 @@ struct ProfileView: View {
         }
     }
 
-
->>>>>>> amna
     private func calculateAge() -> Int? {
         guard let dateOfBirth = userDataManager.profile.dateOfBirth else { return nil }
         let calendar = Calendar.current
@@ -562,12 +500,9 @@ struct ProfileView: View {
             editedBio = userDataManager.profile.shortDescription ?? ""
             editedParentTags = Set(userDataManager.profile.parentTags ?? [])
             editedInterests = Set(userDataManager.profile.interests ?? [])
-<<<<<<< HEAD
-=======
             editedDateOfBirth = userDataManager.profile.dateOfBirth ?? Date()
             originalPhotoURL = userDataManager.profile.photoURL // Preserve original photoURL
             selectedImage = nil // Clear any previously selected image
->>>>>>> amna
         }
         isEditing = true
     }
@@ -579,8 +514,6 @@ struct ProfileView: View {
         userDataManager.profile.shortDescription = editedBio.isEmpty ? nil : editedBio
         userDataManager.profile.parentTags = Array(editedParentTags)
         userDataManager.profile.interests = Array(editedInterests)
-<<<<<<< HEAD
-=======
         userDataManager.profile.dateOfBirth = editedDateOfBirth
         
         // Handle profile picture: preserve existing photoURL if no new image selected
@@ -596,98 +529,11 @@ struct ProfileView: View {
             // If no new image selected, preserve the original photoURL
             userDataManager.profile.photoURL = originalPhotoURL
         }
->>>>>>> amna
         
         // Save to Firebase
         Task {
             do {
                 try await userDataManager.saveToFirebase()
-<<<<<<< HEAD
-                isSaving = false
-                isEditing = false
-            } catch {
-                print("Error saving profile: \(error)")
-                isSaving = false
-                // Still exit edit mode even if save fails
-                isEditing = false
-            }
-        }
-    }
-}
-
-// Flow Layout for wrapping tags
-struct FlowLayout: Layout {
-    var spacing: CGFloat = 8
-    
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let result = FlowResult(
-            in: proposal.width ?? 0,
-            subviews: subviews,
-            spacing: spacing
-        )
-        return result.size
-    }
-    
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let result = FlowResult(
-            in: bounds.width,
-            subviews: subviews,
-            spacing: spacing
-        )
-        for (index, subview) in subviews.enumerated() {
-            subview.place(at: CGPoint(x: bounds.minX + result.frames[index].minX,
-                                     y: bounds.minY + result.frames[index].minY),
-                         proposal: .unspecified)
-        }
-    }
-    
-    struct FlowResult {
-        var size: CGSize = .zero
-        var frames: [CGRect] = []
-        
-        init(in maxWidth: CGFloat, subviews: Subviews, spacing: CGFloat) {
-            var currentX: CGFloat = 0
-            var currentY: CGFloat = 0
-            var lineHeight: CGFloat = 0
-            
-            for subview in subviews {
-                let size = subview.sizeThatFits(.unspecified)
-                
-                if currentX + size.width > maxWidth && currentX > 0 {
-                    currentX = 0
-                    currentY += lineHeight + spacing
-                    lineHeight = 0
-                }
-                
-                frames.append(CGRect(x: currentX, y: currentY, width: size.width, height: size.height))
-                lineHeight = max(lineHeight, size.height)
-                currentX += size.width + spacing
-            }
-            
-            self.size = CGSize(width: maxWidth, height: currentY + lineHeight)
-        }
-    }
-}
-
-// Custom TextField Style for Profile
-struct ProfileTextFieldStyle: TextFieldStyle {
-    func _body(configuration: TextField<Self._Label>) -> some View {
-        configuration
-            .padding()
-            .frame(minHeight: 100)
-            .background(Color(hex: "D4C4B0"))
-            .cornerRadius(12)
-            .foregroundColor(Color(hex: "5C3D2E"))
-            .font(.system(size: 16, design: .rounded))
-    }
-}
-
-#Preview {
-    ProfileView()
-        .environmentObject(UserDataManager.shared)
-}
-
-=======
                 await MainActor.run {
                     // Clear selectedImage after successful save so photoURL persists
                     selectedImage = nil
@@ -742,9 +588,7 @@ struct ProfileTextFieldStyle: TextFieldStyle {
         formatter.dateFormat = "MMM d, yyyy"
         return formatter
     }
-    
-    
-    
+
     // Flow Layout for wrapping tags
     struct FlowLayout: Layout {
         var spacing: CGFloat = 8
@@ -832,4 +676,3 @@ struct ProfileTextFieldStyle: TextFieldStyle {
     return ProfileView()
         .environmentObject(previewManager)
 }
->>>>>>> amna

@@ -19,16 +19,16 @@
 //    @State private var dragOffset: CGSize = .zero
 //    @State private var showChannels = false
 //    @State private var currentTab: TabDestination = .links
-//    
+//
 //    var body: some View {
 //        NavigationStack {
 //            ZStack {
 //                Color(hex: "F8F5EE")
 //                    .ignoresSafeArea()
-//                
+//
 //                VStack(spacing: 0) {
 //                    Spacer(minLength: 0)
-//                    
+//
 //                    // Profile Card Area
 //                    ZStack {
 //                        if currentIndex < profiles.count {
@@ -56,7 +56,7 @@
 //                                Text("No more profiles")
 //                                    .font(.system(size: 20, weight: .bold, design: .rounded))
 //                                    .foregroundColor(Color(hex: "5C3D2E"))
-//                                
+//
 //                                Text("Check back later for new matches")
 //                                    .font(.system(size: 16, design: .rounded))
 //                                    .foregroundColor(Color(hex: "5C3D2E"))
@@ -69,9 +69,9 @@
 //                    .padding(.horizontal, 20)
 //                    .padding(.top, 20)
 //                    .padding(.bottom, 20)
-//                    
+//
 //                    Spacer()
-//                    
+//
 //                    // Action Buttons - Positioned lower
 //                    HStack(spacing: 40) {
 //                        Button(action: swipeLeft) {
@@ -80,20 +80,20 @@
 //                                    .fill(Color(hex: "F8F5EE"))
 //                                    .frame(width: 60, height: 60)
 //                                    .overlay(Circle().stroke(Color(hex: "5C3D2E"), lineWidth: 2))
-//                                
+//
 //                                Image(systemName: "xmark")
 //                                    .foregroundColor(Color(hex: "5C3D2E"))
 //                                    .font(.system(size: 24, weight: .bold))
 //                            }
 //                        }
 //                        .buttonStyle(PlainButtonStyle())
-//                        
+//
 //                        Button(action: swipeRight) {
 //                            ZStack {
 //                                Circle()
 //                                    .fill(Color(hex: "8B9A7E"))
 //                                    .frame(width: 60, height: 60)
-//                                
+//
 //                                Image(systemName: "heart.fill")
 //                                    .foregroundColor(Color(hex: "5C3D2E"))
 //                                    .font(.system(size: 24))
@@ -112,12 +112,12 @@
 //            .toolbar(.hidden, for: .navigationBar)
 //        }
 //    }
-//    
+//
 //    // MARK: - Bottom Navigation Bar
 ////    private var bottomNavBar: some View {
 ////        HStack {
 ////            Spacer()
-////            
+////
 ////            Button(action: {
 ////                showChannels = true
 ////            }) {
@@ -126,32 +126,32 @@
 ////                    .foregroundColor(Color(hex: "5C3D2E"))
 ////            }
 ////            .buttonStyle(PlainButtonStyle())
-////            
+////
 ////            Spacer()
-////            
+////
 ////            // Highlight current tab
 ////            Image(systemName: "link")
 ////                .font(.system(size: 24))
 ////                .foregroundColor(Color(hex: "8B9A7E"))
-////            
+////
 ////            Spacer()
-////            
+////
 ////            Image(systemName: "book")
 ////                .font(.system(size: 24))
 ////                .foregroundColor(Color(hex: "5C3D2E"))
-////            
+////
 ////            Spacer()
-////            
+////
 ////            Image(systemName: "mappin.circle")
 ////                .font(.system(size: 24))
 ////                .foregroundColor(Color(hex: "5C3D2E"))
-////            
+////
 ////            Spacer()
-////            
+////
 ////            Image(systemName: "person")
 ////                .font(.system(size: 24))
 ////                .foregroundColor(Color(hex: "5C3D2E"))
-////            
+////
 ////            Spacer()
 ////        }
 ////        .padding(.vertical, 16)
@@ -163,7 +163,7 @@
 ////            ChannelsView()
 ////        }
 ////    }
-//    
+//
 //    // MARK: - Swipe Logic
 //    private func swipeLeft() {
 //        withAnimation {
@@ -173,7 +173,7 @@
 //            removeCurrentProfile()
 //        }
 //    }
-//    
+//
 //    private func swipeRight() {
 //        withAnimation {
 //            dragOffset = CGSize(width: 500, height: 0)
@@ -182,7 +182,7 @@
 //            removeCurrentProfile()
 //        }
 //    }
-//    
+//
 //    private func removeCurrentProfile() {
 //        if currentIndex < profiles.count {
 //            profiles.remove(at: currentIndex)
@@ -194,30 +194,30 @@
 //// MARK: - Profile Card
 //struct ProfileCard: View {
 //    let profile: Profile
-//    
+//
 //    var body: some View {
 //        VStack(alignment: .leading, spacing: 0) {
 //            ZStack {
 //                RoundedRectangle(cornerRadius: 20)
 //                    .fill(Color(hex: "8B9A7E"))
 //                    .frame(height: 500)
-//                
+//
 //                Image(systemName: profile.image)
 //                    .foregroundColor(Color(hex: "5C3D2E"))
 //                    .font(.system(size: 120))
 //            }
-//            
+//
 //            VStack(alignment: .leading, spacing: 1) {
 //                HStack {
 //                    Text(profile.name)
 //                        .font(.system(size: 28, weight: .bold, design: .rounded))
 //                        .foregroundColor(Color(hex: "5C3D2E"))
-//                    
+//
 //                    Text("\(profile.age)")
 //                        .font(.system(size: 24, weight: .medium, design: .rounded))
 //                        .foregroundColor(Color(hex: "5C3D2E"))
 //                }
-//                
+//
 //                Text(profile.bio)
 //                    .font(.system(size: 16, design: .rounded))
 //                    .foregroundColor(Color(hex: "5C3D2E"))
@@ -354,6 +354,9 @@ struct CardView: View {
     let profile: Profile
     let isTop: Bool
     let onGroupTapped: (String) -> Void
+    @EnvironmentObject var userDataManager: UserDataManager
+    @State private var showBlockConfirmation = false
+    @State private var showReportConfirmation = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -396,18 +399,48 @@ struct CardView: View {
 
                 // Overlay content with name/age, location, and bio snippet
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("\(profile.name), \(profile.age)")
-                        .font(.largeTitle)
-                        .fontWeight(.heavy)
-                        .foregroundColor(.white)
-                        .shadow(radius: 2)
+                    HStack {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("\(profile.name), \(profile.age)")
+                                .font(.largeTitle)
+                                .fontWeight(.heavy)
+                                .foregroundColor(.white)
+                                .shadow(radius: 2)
 
-                    HStack(spacing: 6) {
-                        Image(systemName: "mappin.and.ellipse")
-                        Text(profile.location)
+                            HStack(spacing: 6) {
+                                Image(systemName: "mappin.and.ellipse")
+                                Text(profile.location)
+                            }
+                            .font(.subheadline)
+                            .foregroundColor(.white.opacity(0.9))
+                        }
+                        
+                        Spacer()
+                        
+                        // Menu button for block/report
+                        if isTop {
+                            Menu {
+                                Button(role: .destructive, action: {
+                                    showBlockConfirmation = true
+                                }) {
+                                    Label("Block User", systemImage: "person.crop.circle.badge.xmark")
+                                }
+                                
+                                Button(role: .destructive, action: {
+                                    showReportConfirmation = true
+                                }) {
+                                    Label("Report User", systemImage: "flag")
+                                }
+                            } label: {
+                                Image(systemName: "ellipsis")
+                                    .font(.system(size: 20, weight: .semibold))
+                                    .foregroundColor(.white)
+                                    .padding(8)
+                                    .background(Color.black.opacity(0.3))
+                                    .clipShape(Circle())
+                            }
+                        }
                     }
-                    .font(.subheadline)
-                    .foregroundColor(.white.opacity(0.9))
                 }
                 // Reduced overlay padding slightly
                 .padding(.horizontal, 10)
@@ -469,6 +502,50 @@ struct CardView: View {
         }
         .cornerRadius(20)
         .shadow(color: Color.black.opacity(0.15), radius: 10, x: 0, y: 5)
+        .confirmationDialog("Block User", isPresented: $showBlockConfirmation, titleVisibility: .visible) {
+            Button("Block", role: .destructive) {
+                Task { await blockUser() }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Block \(profile.name)? You won't see their profile anymore.")
+        }
+        .confirmationDialog("Report User", isPresented: $showReportConfirmation, titleVisibility: .visible) {
+            Button("Report", role: .destructive) {
+                reportUser()
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Report \(profile.name) for inappropriate behavior?")
+        }
+    }
+    
+    private func blockUser() async {
+        guard let currentUserID = userDataManager.profile.userID else { return }
+        
+        do {
+            try await FirebaseService.shared.blockUser(userID: currentUserID, userIDToBlock: profile.id)
+            
+            // Reload user profile to get updated blockedUsers list
+            if let userID = userDataManager.profile.userID {
+                do {
+                    let updatedProfile = try await FirebaseService.shared.getUserProfile(userID: userID)
+                    await MainActor.run {
+                        if let profile = updatedProfile {
+                            userDataManager.profile = profile
+                        }
+                    }
+                } catch {
+                    print("Error reloading profile after block: \(error)")
+                }
+            }
+        } catch {
+            print("Error blocking user: \(error)")
+        }
+    }
+    
+    private func reportUser() {
+        MailHelper.reportUser(userID: profile.id, userName: profile.name)
     }
 }
 
@@ -566,6 +643,7 @@ struct MatchmakingView: View {
                             CardView(profile: card, isTop: true, onGroupTapped: { group in
                                 handleGroupTap(group)
                             })
+                            .environmentObject(userDataManager)
                                 .frame(maxWidth: maxCardWidth, alignment: .center)
                                 .padding(.bottom, 1)
                                 .frame(maxWidth: .infinity)
@@ -661,30 +739,6 @@ struct MatchmakingView: View {
                             .clipShape(Circle())
                             .shadow(radius: 5)
                     }
-<<<<<<< HEAD
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 20)
-                    .padding(.top, 20)
-                    .padding(.bottom, 20)
-                    
-                    Spacer()
-                    
-                    // Action Buttons - Positioned lower
-                    HStack(spacing: 40) {
-                        Button(action: swipeLeft) {
-                            ZStack {
-                                Circle()
-                                    .fill(Color(hex: "F8F5EE"))
-                                    .frame(width: 60, height: 60)
-                                    .overlay(Circle().stroke(Color(hex: "5C3D2E"), lineWidth: 2))
-                                
-                                Image(systemName: "xmark")
-                                    .foregroundColor(Color(hex: "5C3D2E"))
-                                    .font(.system(size: 24, weight: .bold))
-                            }
-                        }
-                        .buttonStyle(PlainButtonStyle())
-=======
                     .disabled(topCard == nil)
                     
                     Button {
@@ -712,7 +766,6 @@ struct MatchmakingView: View {
                     ZStack {
                         Color.black.opacity(0.4)
                             .ignoresSafeArea()
->>>>>>> amna
                         
                         VStack(spacing: 20) {
                             Text("🎉 It’s a Match!")
@@ -761,11 +814,6 @@ struct MatchmakingView: View {
                                 }
                             }
                         }
-<<<<<<< HEAD
-                        .buttonStyle(PlainButtonStyle())
-                    }
-                    .padding(.bottom, 100)
-=======
                         .padding()
                         .background(Color.white)
                         .cornerRadius(20)
@@ -773,7 +821,6 @@ struct MatchmakingView: View {
                     }
                 } else {
                     Color.clear.ignoresSafeArea()
->>>>>>> amna
                 }
             }
             .background(Color.appBackground.ignoresSafeArea())
@@ -783,13 +830,16 @@ struct MatchmakingView: View {
                     // Use the same trimmed name that was added to ChannelsManager
                     let channelName = profile.name.trimmingCharacters(in: .whitespaces)
                     MessagesView(channel: Channel(name: channelName, timeAgo: "now", isDirectMessage: true))
+                        .environmentObject(userDataManager)
                 } else {
                     MessagesView(channel: Channel(name: "Direct Message", timeAgo: "now", isDirectMessage: true))
+                        .environmentObject(userDataManager)
                 }
             }
             // Navigate when a group tag is tapped
             .navigationDestination(item: $groupToNavigateTo) { channel in
                 MessagesView(channel: channel)
+                    .environmentObject(userDataManager)
             }
             .task {
                 await loadProfiles()

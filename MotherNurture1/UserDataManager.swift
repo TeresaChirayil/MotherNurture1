@@ -8,48 +8,12 @@
 import Foundation
 import Combine
 import FirebaseFirestore
-<<<<<<< HEAD
-=======
 import FirebaseAuth
->>>>>>> amna
 
 class UserDataManager: ObservableObject {
     static let shared = UserDataManager()
     
     @Published var profile: UserProfile
-<<<<<<< HEAD
-    
-    private let firebaseService = FirebaseService.shared
-    
-    
-    
-    private init() {
-        self.profile = UserProfile()
-    }
-    
-    func saveToFirebase() async throws {
-        // Assign channels based on questionnaire responses
-        profile.assignChannels()
-        
-        // Save or update the profile in Firebase
-        let userID = try await firebaseService.saveUserProfile(profile)
-        
-        // Update the local profile with the userID if it was newly created
-        if profile.userID == nil {
-            profile.userID = userID
-        }
-        
-        // Add user to their assigned channels in Firebase
-        if let channelMemberships = profile.channelMemberships {
-            for channelName in channelMemberships {
-                do {
-                    try await firebaseService.addUserToChannel(userID: userID, channelName: channelName)
-                } catch {
-                    print("⚠️ Error adding user to channel \(channelName): \(error)")
-                    // Continue with other channels even if one fails
-                }
-            }
-=======
     @Published var isAuthenticated: Bool = false
     
     private let firebaseService = FirebaseService.shared
@@ -156,18 +120,14 @@ class UserDataManager: ObservableObject {
                 print("   UserInfo: \(nsError.userInfo)")
             }
             throw error
->>>>>>> amna
         }
     }
     
     func reset() {
         profile = UserProfile()
-<<<<<<< HEAD
-=======
         isAuthenticated = false
         // Sign out from Firebase Auth
         try? firebaseService.signOut()
->>>>>>> amna
     }
     
     // -----------------------------------------------------
@@ -185,11 +145,6 @@ class UserDataManager: ObservableObject {
         }
         
         if let loadedProfile = loadedProfile {
-<<<<<<< HEAD
-            self.profile = loadedProfile
-            print("✅ Successfully loaded profile from Firebase")
-        } else {
-=======
             // Ensure user is authenticated with Firebase Auth
             // If not authenticated, sign in anonymously
             if !firebaseService.isAuthenticated() {
@@ -205,14 +160,11 @@ class UserDataManager: ObservableObject {
             DispatchQueue.main.async {
                 self.isAuthenticated = false
             }
->>>>>>> amna
             print("⚠️ No profile found in Firebase")
         }
     }
     
     // -----------------------------------------------------
-<<<<<<< HEAD
-=======
     // MARK: - Authenticate User (for sign up)
     // -----------------------------------------------------
     func authenticateUser() async throws {
@@ -225,7 +177,6 @@ class UserDataManager: ObservableObject {
     }
     
     // -----------------------------------------------------
->>>>>>> amna
     // MARK: - Check if Profile Exists
     // -----------------------------------------------------
     func profileExists(email: String) async -> Bool {
@@ -237,10 +188,6 @@ class UserDataManager: ObservableObject {
             return false
         }
     }
-<<<<<<< HEAD
-}
-
-=======
     
     // -----------------------------------------------------
     // MARK: - Clear Profile (instance method)
@@ -255,4 +202,3 @@ class UserDataManager: ObservableObject {
         // Add any additional cleanup (e.g., local caches) here.
     }
 }
->>>>>>> amna

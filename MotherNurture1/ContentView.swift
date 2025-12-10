@@ -14,14 +14,10 @@ struct ContentView: View {
     @State private var password: String = ""
     @State private var navigateToChannels = false
     @State private var navigateToSignUp = false
-<<<<<<< HEAD
-    
-=======
     @State private var keyboardHeight: CGFloat = 0
     @State private var loginError: String? = nil
     @State private var isLoggingIn: Bool = false
     @State private var isPasswordVisible: Bool = false
->>>>>>> amna
 
     var body: some View {
         NavigationStack {
@@ -31,65 +27,6 @@ struct ContentView: View {
                     .ignoresSafeArea()
                     .onTapGesture { dismissKeyboard() }
                 
-<<<<<<< HEAD
-                VStack(spacing: 30) {
-                    Spacer()
-                        .frame(height: 40)
-                    
-                    // Logo
-                    Image("myLogo")
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 180, height: 200)
-                        
-                    
-                    // App Title
-                    Text("MotherNurtue")
-                        .font(.system(size: 32, weight: .bold, design: .rounded))
-                        .foregroundColor(Color(hex: "5C3D2E"))
-                    
-                    
-                    // Input Fields
-                    VStack(spacing: 15) {
-                        TextField("Email", text: $email)
-                            .textFieldStyle(CustomTextFieldStyle())
-                        
-                        SecureField("Password", text: $password)
-                            .textFieldStyle(CustomTextFieldStyle())
-                    }
-                    .padding(.horizontal, 40)
-                    
-                    // New User link and Sign Up button
-                    VStack(alignment: .center, spacing: 10) {
-                        Button(action: {
-                            navigateToSignUp = true
-                        }) {
-                            Text("New User?")
-                                .font(.system(size: 14, design: .rounded))
-                                .foregroundColor(Color(hex: "5C3D2E"))
-                                .underline()
-                        }
-                        
-                        Button(action: {
-                            // Load user profile from Firebase if email exists
-                            if !email.isEmpty {
-                                Task {
-                                    do {
-                                        try await userDataManager.loadProfileFromFirebase(email: email)
-                                    } catch {
-                                        print("Error loading profile: \(error)")
-                                    }
-                                }
-                            }
-                            navigateToChannels = true
-                        }) {
-                            Text("Log in")
-                                .font(.system(size: 20, weight: .medium, design: .rounded))
-                                .foregroundColor(Color(hex: "5C3D2E"))
-                                .frame(width: 100, height: 44)
-                                .background(Color(hex: "9BA897"))
-                                .cornerRadius(8)
-=======
                 GeometryReader { geo in
                     VStack(spacing: 0) {
                         ScrollView {
@@ -163,7 +100,6 @@ struct ContentView: View {
                             }
                             .padding(.top, 0)
                             .contentShape(Rectangle())
->>>>>>> amna
                         }
                         // Dismiss keyboard when dragging
                         .gesture(DragGesture().onChanged { _ in dismissKeyboard() })
@@ -174,10 +110,6 @@ struct ContentView: View {
             }
             // Important: do not allow navigation to ChannelsView from here based on a local flag.
             // App root switches to ChannelsView when userDataManager.isAuthenticated becomes true.
-            .navigationDestination(isPresented: $navigateToSignUp) {
-                TutorialView()
-                    .environmentObject(userDataManager)
-            }
             .navigationDestination(isPresented: $navigateToSignUp) {
                 TutorialView()
                     .environmentObject(userDataManager)

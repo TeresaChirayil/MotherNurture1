@@ -18,12 +18,6 @@ struct MotherNurture1App: App {
     
     var body: some Scene {
         WindowGroup {
-<<<<<<< HEAD
-            NavigationView {
-                ContentView()
-                    .environmentObject(userDataManager)
-            }
-=======
             Group {
                 if userDataManager.isAuthenticated {
                     
@@ -43,7 +37,6 @@ struct MotherNurture1App: App {
             }
             .animation(.easeInOut(duration: 0.25),
                        value: userDataManager.isAuthenticated)
->>>>>>> amna
         }
     }
 }
