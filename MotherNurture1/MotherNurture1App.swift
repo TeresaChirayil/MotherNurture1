@@ -35,6 +35,7 @@ struct MotherNurture1App: App {
                         .environmentObject(userDataManager)
                 }
             }
+            .id(userDataManager.isAuthenticated ? "authenticated" : "notAuthenticated")
             .animation(.easeInOut(duration: 0.25),
                        value: userDataManager.isAuthenticated)
         }
