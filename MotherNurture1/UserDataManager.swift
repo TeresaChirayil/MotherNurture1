@@ -134,33 +134,87 @@ class UserDataManager: ObservableObject {
     // MARK: - Load Profile from Firebase
     // -----------------------------------------------------
     func loadProfileFromFirebase(userID: String? = nil, email: String? = nil) async throws {
+        // CRITICAL: Authenticate FIRST before querying Firestore
+        // Firestore security rules require authentication to read user profiles
+        if !firebaseService.isAuthenticated() {
+            print("🔐 Not authenticated, signing in anonymously to enable Firestore access...")
+            do {
+                _ = try await firebaseService.signInAnonymously()
+                print("✅ Authenticated successfully")
+                // Small delay to ensure auth state is fully established
+                try? await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
+            } catch {
+                print("❌ Failed to authenticate: \(error)")
+                throw NSError(
+                    domain: "UserDataManager",
+                    code: -1,
+                    userInfo: [NSLocalizedDescriptionKey: "Authentication failed. Please check your internet connection and try again."]
+                )
+            }
+        } else {
+            print("✅ Already authenticated")
+        }
+        
+        // Now query Firestore (we're authenticated, so this will work)
         var loadedProfile: UserProfile?
         
-        if let userID = userID ?? profile.userID {
-            // Load by userID if available
-            loadedProfile = try await firebaseService.getUserProfile(userID: userID)
-        } else if let email = email ?? profile.email {
-            // Load by email if userID not available
-            loadedProfile = try await firebaseService.getUserProfileByEmail(email: email)
+        do {
+            if let userID = userID ?? profile.userID {
+                // Load by userID if available
+                print("🔍 Loading profile by userID: \(userID)")
+                loadedProfile = try await firebaseService.getUserProfile(userID: userID)
+            } else if let email = email ?? profile.email {
+                // Load by email if userID not available
+                print("🔍 Loading profile by email: \(email)")
+                loadedProfile = try await firebaseService.getUserProfileByEmail(email: email)
+            } else {
+                throw NSError(
+                    domain: "UserDataManager",
+                    code: -1,
+                    userInfo: [NSLocalizedDescriptionKey: "No userID or email provided"]
+                )
+            }
+        } catch let error as NSError {
+            // Provide more specific error messages
+            if error.domain.contains("FIRFirestoreErrorDomain") || error.domain.contains("Firestore") {
+                if error.code == 7 { // Permission denied
+                    print("❌ Permission denied - this should not happen if authentication succeeded")
+                    throw NSError(
+                        domain: "UserDataManager",
+                        code: -1,
+                        userInfo: [NSLocalizedDescriptionKey: "Permission denied. Please try again."]
+                    )
+                } else if error.code == 14 { // Unavailable
+                    print("❌ Firestore unavailable")
+                    throw NSError(
+                        domain: "UserDataManager",
+                        code: -1,
+                        userInfo: [NSLocalizedDescriptionKey: "Service unavailable. Please check your internet connection and try again."]
+                    )
+                }
+            }
+            // Re-throw other errors
+            throw error
         }
         
         if let loadedProfile = loadedProfile {
-            // Ensure user is authenticated with Firebase Auth
-            // If not authenticated, sign in anonymously
-            if !firebaseService.isAuthenticated() {
-                _ = try await firebaseService.signInAnonymously()
-            }
-            
             DispatchQueue.main.async {
                 self.profile = loadedProfile
                 self.isAuthenticated = true
             }
             print("✅ Successfully loaded profile from Firebase")
+            print("   UserID: \(loadedProfile.userID ?? "nil")")
+            print("   Email: \(loadedProfile.email ?? "nil")")
         } else {
             DispatchQueue.main.async {
                 self.isAuthenticated = false
             }
             print("⚠️ No profile found in Firebase")
+            throw NSError(
+                domain: "UserDataManager",
+                code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "No account found for this email. Please create a new account."]
+            )
         }
     }
     
