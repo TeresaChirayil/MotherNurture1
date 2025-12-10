@@ -93,7 +93,7 @@ struct UserProfile: Codable {
         // Also check specialNeedsPreference for disabilities
         if let specialNeedsPreference = specialNeedsPreference {
             // Check if user has a child with a specific condition or wants to connect with special needs parents
-            if specialNeedsPreference.contains("specific condition") || 
+            if specialNeedsPreference.contains("specific condition") ||
                specialNeedsPreference.contains("connect with parents of children with special needs") {
                 if !channels.contains("Mothers of Children with Disabilities") {
                     channels.append("Mothers of Children with Disabilities")

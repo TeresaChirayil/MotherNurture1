@@ -24,8 +24,6 @@ struct ProfileView: View {
     @State private var showDatePicker = false
     @State private var editedDateOfBirth: Date = Date()
     @State private var originalPhotoURL: String? = nil
-
-    
     
     let parentTags = [
         "First-time Parent",
@@ -109,10 +107,6 @@ struct ProfileView: View {
                             .buttonStyle(PlainButtonStyle())
                             .disabled(isSaving)
                         }
-                        .padding(.horizontal, 20)
-                        .padding(.top, 20)
-                        .padding(.bottom, 20)
-
                         .padding(.horizontal, 20)
                         .padding(.top, 20)
                         .padding(.bottom, 20)
@@ -492,7 +486,6 @@ struct ProfileView: View {
         }
     }
 
-
     private func calculateAge() -> Int? {
         guard let dateOfBirth = userDataManager.profile.dateOfBirth else { return nil }
         let calendar = Calendar.current
@@ -596,9 +589,7 @@ struct ProfileView: View {
         formatter.dateFormat = "MMM d, yyyy"
         return formatter
     }
-    
-    
-    
+
     // Flow Layout for wrapping tags
     struct FlowLayout: Layout {
         var spacing: CGFloat = 8

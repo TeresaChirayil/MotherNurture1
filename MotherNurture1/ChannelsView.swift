@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ChannelsView: View {
+    @EnvironmentObject var userDataManager: UserDataManager
     @ObservedObject private var channelsManager = ChannelsManager.shared
     @State private var searchText: String = ""
     @State private var showCreateChannel = false
@@ -115,6 +116,7 @@ struct ChannelsView: View {
             // ✅ Navigation to Messages screen
             .navigationDestination(item: $selectedChannel) { channel in
                 MessagesView(channel: channel)
+                    .environmentObject(userDataManager)
             }
         }
     }

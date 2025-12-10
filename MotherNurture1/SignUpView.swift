@@ -29,7 +29,6 @@ struct SignUpView: View {
     @State private var isSubmitting: Bool = false
     @State private var showEULA: Bool = false
     @State private var hasAcceptedEULA: Bool = false
-
     var body: some View {
         NavigationStack {
             ZStack {
