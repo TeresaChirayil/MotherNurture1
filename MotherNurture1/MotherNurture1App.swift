@@ -18,10 +18,32 @@ struct MotherNurture1App: App {
     
     var body: some Scene {
         WindowGroup {
+<<<<<<< HEAD
             NavigationView {
                 ContentView()
                     .environmentObject(userDataManager)
             }
+=======
+            Group {
+                if userDataManager.isAuthenticated {
+                    
+                    // Authenticated area
+                    NavigationStack {
+                        MainTabView()
+                            .environmentObject(userDataManager)
+                            .navigationBarBackButtonHidden(true)   // ← moved HERE
+                    }
+                    
+                } else {
+                    
+                    // Login Screen — NOT wrapped in NavigationStack
+                    ContentView()
+                        .environmentObject(userDataManager)
+                }
+            }
+            .animation(.easeInOut(duration: 0.25),
+                       value: userDataManager.isAuthenticated)
+>>>>>>> amna
         }
     }
 }

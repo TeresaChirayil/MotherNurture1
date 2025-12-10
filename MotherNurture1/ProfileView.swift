@@ -6,6 +6,10 @@
 //
 
 import SwiftUI
+<<<<<<< HEAD
+=======
+import FirebaseAuth
+>>>>>>> amna
 
 struct ProfileView: View {
     @EnvironmentObject var userDataManager: UserDataManager
@@ -14,8 +18,22 @@ struct ProfileView: View {
     @State private var editedParentTags: Set<String> = []
     @State private var editedInterests: Set<String> = []
     @State private var showingImagePicker = false
+<<<<<<< HEAD
     @State private var isSaving = false
     @State private var isLoading = false
+=======
+    @State private var selectedImage: UIImage? = nil
+    @State private var isSaving = false
+    @State private var isLoading = false
+    @State private var showLogoutAlert = false
+    @State private var showDeleteProfileAlert = false
+    @State private var isDeleting = false
+    @State private var showDatePicker = false
+    @State private var editedDateOfBirth: Date = Date()
+    @State private var originalPhotoURL: String? = nil
+
+    
+>>>>>>> amna
     
     let parentTags = [
         "First-time Parent",
@@ -47,8 +65,33 @@ struct ProfileView: View {
                     VStack(spacing: 0) {
                         // Top Navigation - Edit Button
                         HStack {
+<<<<<<< HEAD
                             Spacer()
                             
+=======
+                            // Sign Out Button
+                            HStack(spacing: 12) {
+                                Button(action: { showLogoutAlert = true }) {
+                                    HStack {
+                                        Image(systemName: "rectangle.portrait.and.arrow.right")
+                                        Text("Sign Out")
+                                    }
+                                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                                    .foregroundColor(.red)
+                                }
+                                .alert("Are you sure you want to sign out?", isPresented: $showLogoutAlert) {
+                                    Button("Cancel", role: .cancel) { }
+                                    Button("Sign Out", role: .destructive) {
+                                        signOut()
+                                    }
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                            }
+
+                            Spacer()
+
+                            // Existing Edit/Save button
+>>>>>>> amna
                             Button(action: {
                                 if isEditing {
                                     saveProfile()
@@ -75,6 +118,13 @@ struct ProfileView: View {
                         .padding(.horizontal, 20)
                         .padding(.top, 20)
                         .padding(.bottom, 20)
+<<<<<<< HEAD
+=======
+
+                        .padding(.horizontal, 20)
+                        .padding(.top, 20)
+                        .padding(.bottom, 20)
+>>>>>>> amna
                         
                         // Profile Picture
                         ZStack {
@@ -86,7 +136,18 @@ struct ProfileView: View {
                                         .stroke(Color.white, lineWidth: 3)
                                 )
                             
+<<<<<<< HEAD
                             if let photoURL = userDataManager.profile.photoURL, !photoURL.isEmpty {
+=======
+                            // Show selected image, then photoURL, then placeholder
+                            if let selectedImage = selectedImage {
+                                Image(uiImage: selectedImage)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(width: 120, height: 120)
+                                    .clipShape(Circle())
+                            } else if let photoURL = userDataManager.profile.photoURL, !photoURL.isEmpty {
+>>>>>>> amna
                                 AsyncImage(url: URL(string: photoURL)) { image in
                                     image
                                         .resizable()
@@ -118,6 +179,10 @@ struct ProfileView: View {
                                             .font(.system(size: 18))
                                     }
                                 }
+<<<<<<< HEAD
+=======
+                                .buttonStyle(PlainButtonStyle())
+>>>>>>> amna
                                 .offset(x: 40, y: 40)
                             }
                         }
@@ -128,10 +193,69 @@ struct ProfileView: View {
                            let lastName = userDataManager.profile.lastName {
                             let fullName = "\(firstName) \(lastName)"
                             let age = calculateAge()
+<<<<<<< HEAD
                             Text("\(fullName)\(age != nil ? ", \(age!)" : "")")
                                 .font(.system(size: 24, weight: .bold, design: .rounded))
                                 .foregroundColor(Color(hex: "5C3D2E"))
                                 .padding(.bottom, 24)
+=======
+                            
+                            VStack(spacing: 8) {
+                                Text(fullName)
+                                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                                    .foregroundColor(Color(hex: "5C3D2E"))
+                                
+                                if isEditing {
+                                    VStack(spacing: 8) {
+                                        HStack(spacing: 8) {
+                                            Text("Date of Birth:")
+                                                .font(.system(size: 16, design: .rounded))
+                                                .foregroundColor(Color(hex: "5C3D2E"))
+                                            
+                                            Spacer()
+                                            
+                                            Button(action: {
+                                                showDatePicker.toggle()
+                                            }) {
+                                                Text(dateFormatter.string(from: editedDateOfBirth))
+                                                    .font(.system(size: 16, weight: .medium, design: .rounded))
+                                                    .foregroundColor(Color(hex: "8B9A7E"))
+                                                    .padding(.horizontal, 12)
+                                                    .padding(.vertical, 6)
+                                                    .background(Color(hex: "D4C4B0"))
+                                                    .cornerRadius(8)
+                                            }
+                                        }
+                                        .padding(.horizontal, 20)
+                                        
+                                        if showDatePicker {
+                                            DatePicker(
+                                                "Date of Birth",
+                                                selection: $editedDateOfBirth,
+                                                displayedComponents: .date
+                                            )
+                                            .datePickerStyle(.compact)
+                                            .accentColor(Color(hex: "5C3D2E"))
+                                            .padding(.horizontal, 20)
+                                        }
+                                        
+                                        if let calculatedAge = calculateAge(from: editedDateOfBirth) {
+                                            Text("Age: \(calculatedAge)")
+                                                .font(.system(size: 14, design: .rounded))
+                                                .foregroundColor(Color(hex: "8B9A7E"))
+                                                .padding(.horizontal, 20)
+                                        }
+                                    }
+                                } else {
+                                    if let age = age {
+                                        Text("Age: \(age)")
+                                            .font(.system(size: 16, design: .rounded))
+                                            .foregroundColor(Color(hex: "8B9A7E"))
+                                    }
+                                }
+                            }
+                            .padding(.bottom, 24)
+>>>>>>> amna
                         }
                         
                         // Bio Section
@@ -329,6 +453,7 @@ struct ProfileView: View {
                     }
                 }
                 .overlay(alignment: .bottom) {
+<<<<<<< HEAD
                     BottomNavBar(currentTab: .constant(.profile))
                         .padding(.bottom, 5)
                 }
@@ -345,10 +470,48 @@ struct ProfileView: View {
             .refreshable {
                 // Allow pull-to-refresh to reload profile
                 await loadProfileIfNeeded()
+=======
+                    VStack(spacing: 0) {
+                        Spacer()
+                        Button(action: { showDeleteProfileAlert = true }) {
+                            Text("Delete Account")
+                                .font(.system(size: 12, weight: .regular, design: .rounded))
+                                .foregroundColor(.red.opacity(0.7))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isDeleting)
+                        .alert("Delete Account", isPresented: $showDeleteProfileAlert) {
+                            Button("Cancel", role: .cancel) { }
+                            Button("Delete", role: .destructive) {
+                                deleteProfile()
+                            }
+                        } message: {
+                            Text("Are you sure you want to delete your account? This action cannot be undone. Your profile will be permanently deleted.")
+                        }
+                        .padding(.bottom, 20)
+                    }
+                }
+                .toolbar(.hidden, for: .navigationBar)
+                .sheet(isPresented: $showingImagePicker) {
+                    ImagePicker(selectedImage: $selectedImage)
+                }
+                .task {
+                    // Load profile from Firebase when view appears
+                    await loadProfileIfNeeded()
+                }
+                .refreshable {
+                    // Allow pull-to-refresh to reload profile
+                    await loadProfileIfNeeded()
+                }
+>>>>>>> amna
             }
         }
     }
     
+<<<<<<< HEAD
+=======
+    // MARK: - Private Functions
+>>>>>>> amna
     private func loadProfileIfNeeded() async {
         // Load profile if we have a userID or email
         guard userDataManager.profile.userID != nil || (userDataManager.profile.email != nil && !userDataManager.profile.email!.isEmpty) else {
@@ -368,6 +531,25 @@ struct ProfileView: View {
         isLoading = false
     }
     
+<<<<<<< HEAD
+=======
+    // MARK: - Sign Out
+    private func signOut() {
+        do {
+            try Auth.auth().signOut()
+            userDataManager.clearProfile()
+
+            // Trigger redirect — tell the app the user is now logged out
+            userDataManager.isAuthenticated = false
+
+            print("Signed out successfully")
+        } catch {
+            print("Error signing out: \(error.localizedDescription)")
+        }
+    }
+
+
+>>>>>>> amna
     private func calculateAge() -> Int? {
         guard let dateOfBirth = userDataManager.profile.dateOfBirth else { return nil }
         let calendar = Calendar.current
@@ -380,6 +562,12 @@ struct ProfileView: View {
             editedBio = userDataManager.profile.shortDescription ?? ""
             editedParentTags = Set(userDataManager.profile.parentTags ?? [])
             editedInterests = Set(userDataManager.profile.interests ?? [])
+<<<<<<< HEAD
+=======
+            editedDateOfBirth = userDataManager.profile.dateOfBirth ?? Date()
+            originalPhotoURL = userDataManager.profile.photoURL // Preserve original photoURL
+            selectedImage = nil // Clear any previously selected image
+>>>>>>> amna
         }
         isEditing = true
     }
@@ -391,11 +579,30 @@ struct ProfileView: View {
         userDataManager.profile.shortDescription = editedBio.isEmpty ? nil : editedBio
         userDataManager.profile.parentTags = Array(editedParentTags)
         userDataManager.profile.interests = Array(editedInterests)
+<<<<<<< HEAD
+=======
+        userDataManager.profile.dateOfBirth = editedDateOfBirth
+        
+        // Handle profile picture: preserve existing photoURL if no new image selected
+        // If a new image was selected, save it (for now as placeholder URL)
+        // In production, you'd upload to Firebase Storage and get a URL
+        if let _ = selectedImage {
+            // Only update photoURL if a new image was selected
+            // This preserves the existing photoURL if user didn't change the image
+            let newPhotoURL = "selected_image_\(UUID().uuidString)"
+            userDataManager.profile.photoURL = newPhotoURL
+            print("🔥 [ProfileView] New image selected, saving to profile")
+        } else {
+            // If no new image selected, preserve the original photoURL
+            userDataManager.profile.photoURL = originalPhotoURL
+        }
+>>>>>>> amna
         
         // Save to Firebase
         Task {
             do {
                 try await userDataManager.saveToFirebase()
+<<<<<<< HEAD
                 isSaving = false
                 isEditing = false
             } catch {
@@ -480,3 +687,149 @@ struct ProfileTextFieldStyle: TextFieldStyle {
         .environmentObject(UserDataManager.shared)
 }
 
+=======
+                await MainActor.run {
+                    // Clear selectedImage after successful save so photoURL persists
+                    selectedImage = nil
+                    isSaving = false
+                    isEditing = false
+                }
+            } catch {
+                print("Error saving profile: \(error)")
+                await MainActor.run {
+                    isSaving = false
+                    // Still exit edit mode even if save fails
+                    isEditing = false
+                }
+            }
+        }
+    }
+    
+    private func deleteProfile() {
+        guard let userID = userDataManager.profile.userID else {
+            print("❌ Cannot delete profile: No userID")
+            return
+        }
+        
+        isDeleting = true
+        Task {
+            do {
+                // Delete profile from Firebase
+                try await FirebaseService.shared.deleteUserProfile(userID: userID)
+                
+                // Sign out and clear local data
+                await MainActor.run {
+                    signOut()
+                    isDeleting = false
+                }
+            } catch {
+                print("Error deleting profile: \(error)")
+                await MainActor.run {
+                    isDeleting = false
+                }
+            }
+        }
+    }
+    
+    private func calculateAge(from date: Date) -> Int? {
+        let calendar = Calendar.current
+        let ageComponents = calendar.dateComponents([.year], from: date, to: Date())
+        return ageComponents.year
+    }
+    
+    private var dateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d, yyyy"
+        return formatter
+    }
+    
+    
+    
+    // Flow Layout for wrapping tags
+    struct FlowLayout: Layout {
+        var spacing: CGFloat = 8
+        
+        func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+            let result = FlowResult(
+                in: proposal.width ?? 0,
+                subviews: subviews,
+                spacing: spacing
+            )
+            return result.size
+        }
+        
+        func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+            let result = FlowResult(
+                in: bounds.width,
+                subviews: subviews,
+                spacing: spacing
+            )
+            for (index, subview) in subviews.enumerated() {
+                subview.place(at: CGPoint(x: bounds.minX + result.frames[index].minX,
+                                          y: bounds.minY + result.frames[index].minY),
+                              proposal: .unspecified)
+            }
+        }
+        
+        struct FlowResult {
+            var size: CGSize = .zero
+            var frames: [CGRect] = []
+            
+            init(in maxWidth: CGFloat, subviews: Subviews, spacing: CGFloat) {
+                var currentX: CGFloat = 0
+                var currentY: CGFloat = 0
+                var lineHeight: CGFloat = 0
+                
+                for subview in subviews {
+                    let size = subview.sizeThatFits(.unspecified)
+                    
+                    if currentX + size.width > maxWidth && currentX > 0 {
+                        currentX = 0
+                        currentY += lineHeight + spacing
+                        lineHeight = 0
+                    }
+                    
+                    frames.append(CGRect(x: currentX, y: currentY, width: size.width, height: size.height))
+                    lineHeight = max(lineHeight, size.height)
+                    currentX += size.width + spacing
+                }
+                
+                self.size = CGSize(width: maxWidth, height: currentY + lineHeight)
+            }
+        }
+    }
+    
+    // Custom TextField Style for Profile
+    struct ProfileTextFieldStyle: TextFieldStyle {
+        func _body(configuration: TextField<Self._Label>) -> some View {
+            configuration
+                .padding()
+                .frame(minHeight: 100)
+                .background(Color(hex: "D4C4B0"))
+                .cornerRadius(12)
+                .foregroundColor(Color(hex: "5C3D2E"))
+                .font(.system(size: 16, design: .rounded))
+        }
+    }
+}
+
+// MARK: - Preview
+#Preview {
+    // Prefer a lightweight, non-shared instance for preview to avoid cycles
+    // If UserDataManager had a public init, we would use it. Since it's a singleton,
+    // we can still use shared but keep data simple and avoid triggering Firebase work.
+    let previewManager = UserDataManager.shared
+    var profile = UserProfile()
+    profile.firstName = "Alex"
+    profile.lastName = "Doe"
+    profile.email = "preview@example.com"
+    profile.dateOfBirth = Calendar.current.date(byAdding: .year, value: -30, to: Date())
+    profile.shortDescription = "Loves hiking, cooking, and meeting new parents."
+    profile.parentTags = ["First-time Parent", "Working full-time"]
+    profile.interests = ["Reading", "Cooking"]
+    previewManager.profile = profile
+    
+    return ProfileView()
+        .environmentObject(previewManager)
+}
+>>>>>>> amna

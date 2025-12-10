@@ -56,6 +56,12 @@ struct UserProfile: Codable {
     // Channel Memberships
     var channelMemberships: [String]? // Array of channel names the user belongs to
     
+<<<<<<< HEAD
+=======
+    // Blocked Users
+    var blockedUsers: [String]? // Array of userIDs that this user has blocked
+    
+>>>>>>> amna
     init() {
         self.createdAt = Timestamp(date: Date())
         self.updatedAt = Timestamp(date: Date())
@@ -127,6 +133,10 @@ struct UserProfile: Codable {
         if let updatedAt = updatedAt { dict["updatedAt"] = updatedAt }
         if let userID = userID { dict["userID"] = userID }
         if let channelMemberships = channelMemberships { dict["channelMemberships"] = channelMemberships }
+<<<<<<< HEAD
+=======
+        if let blockedUsers = blockedUsers { dict["blockedUsers"] = blockedUsers }
+>>>>>>> amna
         
         return dict
     }
