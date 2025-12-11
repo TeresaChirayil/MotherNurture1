@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 //////
 //////  FinalTouchView.swift
 //////  MotherNurture1
@@ -340,6 +341,8 @@
 //
 //
 
+=======
+>>>>>>> Ashley
 //
 //  FinalTouchView.swift
 //  MotherNurture1
@@ -544,4 +547,3 @@ struct FinalTouchTextFieldStyle: TextFieldStyle {
 #Preview {
     FinalTouchView()
 }
-

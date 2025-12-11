@@ -471,6 +471,8 @@ struct PostRowView: View {
     @State private var isLiked: Bool
     @State private var likeCount: Int
     @State private var commentCount: Int
+    @State private var showBlockConfirmation = false
+    @State private var showReportConfirmation = false
     let post: ForumPost
     var onRefresh: (() -> Void)?
     
@@ -480,6 +482,11 @@ struct PostRowView: View {
         self._likeCount = State(initialValue: post.likeCount)
         self._commentCount = State(initialValue: post.commentCount)
         self.onRefresh = onRefresh
+    }
+    
+    private var canBlockOrReport: Bool {
+        guard let userID = userDataManager.profile.userID else { return false }
+        return post.authorID != userID
     }
     
     var body: some View {
@@ -499,9 +506,29 @@ struct PostRowView: View {
                         .font(.system(size: 12, design: .rounded))
                         .foregroundColor(Color(hex: "8B9A7E"))
                     
-                    Image(systemName: "ellipsis")
-                        .foregroundColor(Color(hex: "5C3D2E").opacity(0.6))
-                        .font(.system(size: 14))
+                    if canBlockOrReport {
+                        Menu {
+                            Button(role: .destructive, action: {
+                                showBlockConfirmation = true
+                            }) {
+                                Label("Block User", systemImage: "person.crop.circle.badge.xmark")
+                            }
+                            
+                            Button(role: .destructive, action: {
+                                showReportConfirmation = true
+                            }) {
+                                Label("Report Post", systemImage: "flag")
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis")
+                                .foregroundColor(Color(hex: "5C3D2E").opacity(0.6))
+                                .font(.system(size: 14))
+                        }
+                    } else {
+                        Image(systemName: "ellipsis")
+                            .foregroundColor(Color(hex: "5C3D2E").opacity(0.6))
+                            .font(.system(size: 14))
+                    }
                 }
                 
                 Text(post.authorName)
@@ -560,6 +587,54 @@ struct PostRowView: View {
             PostDetailView(post: post)
                 .environmentObject(userDataManager)
         }
+        .confirmationDialog("Block User", isPresented: $showBlockConfirmation, titleVisibility: .visible) {
+            Button("Block", role: .destructive) {
+                Task { await blockUser() }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Block \(post.authorName)? You won't see their posts anymore.")
+        }
+        .confirmationDialog("Report Post", isPresented: $showReportConfirmation, titleVisibility: .visible) {
+            Button("Report", role: .destructive) {
+                reportPost()
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Report this post for inappropriate content?")
+        }
+    }
+    
+    private func blockUser() async {
+        guard let currentUserID = userDataManager.profile.userID else { return }
+        
+        do {
+            try await FirebaseService.shared.blockUser(userID: currentUserID, userIDToBlock: post.authorID)
+            
+            // Reload user profile to get updated blockedUsers list
+            if let userID = userDataManager.profile.userID {
+                do {
+                    let updatedProfile = try await FirebaseService.shared.getUserProfile(userID: userID)
+                    await MainActor.run {
+                        if let profile = updatedProfile {
+                            userDataManager.profile = profile
+                        }
+                    }
+                } catch {
+                    print("Error reloading profile after block: \(error)")
+                }
+            }
+            
+            // Refresh posts to filter out blocked user
+            onRefresh?()
+        } catch {
+            print("Error blocking user: \(error)")
+        }
+    }
+    
+    private func reportPost() {
+        let postID = post.id ?? "unknown"
+        MailHelper.reportPost(postID: postID, postTitle: post.title, authorName: post.authorName)
     }
     
     private func toggleLike() {

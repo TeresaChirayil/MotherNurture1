@@ -426,34 +426,16 @@ struct PostDetailView: View {
     
     // MARK: - Report Post
     private func reportPost() async {
-        guard let postID = currentPost.id,
-              let userID = userDataManager.profile.userID else {
+        guard let postID = currentPost.id else {
             await MainActor.run {
-                self.errorMessage = "Please log in to report posts."
+                self.errorMessage = "Post ID is missing."
                 self.showError = true
             }
             return
         }
         
-        let reportData: [String: Any] = [
-            "postID": postID,
-            "reporterID": userID,
-            "reason": "Inappropriate or harmful content",
-            "createdAt": Timestamp(date: Date())
-        ]
-        
-        do {
-            try await Firestore.firestore().collection("reports").addDocument(data: reportData)
-            await MainActor.run {
-                self.errorMessage = "Report submitted successfully."
-                self.showError = true
-            }
-        } catch {
-            await MainActor.run {
-                self.errorMessage = "Failed to report post: \(error.localizedDescription)"
-                self.showError = true
-            }
-        }
+        // Open mail app with pre-filled report email
+        MailHelper.reportPost(postID: postID, postTitle: currentPost.title, authorName: currentPost.authorName)
     }
     
     // MARK: - Block User
