@@ -575,6 +575,40 @@ struct MatchmakingView: View {
         profiles.first
     }
     
+    private func performSwipeAnimation(isMatch: Bool) {
+        guard topCard != nil else { return }
+        
+        let targetOffset = CGSize(width: isMatch ? 500 : -500, height: 0)
+        let springAnimation = Animation.spring(response: 0.3, dampingFraction: 0.6)
+        
+        // Reset lastOffset before starting new animation
+        lastOffset = .zero
+        
+        // Start the swipe animation - this will animate the card off-screen
+        withAnimation(springAnimation) {
+            offset = targetOffset
+        }
+        
+        // Calculate when animation completes and remove card at that exact moment
+        // For spring(response: 0.3, dampingFraction: 0.6), settling time ≈ 0.55-0.6s
+        let animationCompletionTime = 0.6
+        
+        Task { @MainActor in
+            // Wait for animation to fully complete before removing the card
+            try? await Task.sleep(nanoseconds: UInt64(animationCompletionTime * 1_000_000_000))
+            
+            // Now that the card has fully animated off-screen, remove it and reset state
+            // This ensures no visual stretching as the next card smoothly takes its place
+            withAnimation(.easeOut(duration: 0.15)) {
+                if !profiles.isEmpty {
+                    profiles.removeFirst()
+                }
+                offset = .zero
+                lastOffset = .zero
+            }
+        }
+    }
+    
     private func handleSwipe(isMatch: Bool) {
         if let card = topCard {
             if isMatch {
@@ -586,16 +620,8 @@ struct MatchmakingView: View {
                 print("Skipped \(card.name)")
             }
             
-            // Remove card after slight delay so animation can play
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                withAnimation(.easeOut) {
-                    if !profiles.isEmpty {
-                        profiles.removeFirst()
-                    }
-                    offset = .zero
-                    lastOffset = .zero
-                }
-            }
+            // Perform the swipe animation which handles removal on completion
+            performSwipeAnimation(isMatch: isMatch)
             
             // Reload from Firebase if nearly empty
             if profiles.count <= 1 {
@@ -661,14 +687,8 @@ struct MatchmakingView: View {
                                         }
                                         .onEnded { _ in
                                             if offset.width > swipeThreshold {
-                                                withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                                                    offset = CGSize(width: 500, height: 0)
-                                                }
                                                 handleSwipe(isMatch: true)
                                             } else if offset.width < -swipeThreshold {
-                                                withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                                                    offset = CGSize(width: -500, height: 0)
-                                                }
                                                 handleSwipe(isMatch: false)
                                             } else {
                                                 withAnimation(.spring()) {
@@ -726,9 +746,6 @@ struct MatchmakingView: View {
                 
                 HStack(spacing: 40) {
                     Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                            offset = CGSize(width: -500, height: 0)
-                        }
                         handleSwipe(isMatch: false)
                     } label: {
                         Image(systemName: "xmark")
@@ -742,9 +759,6 @@ struct MatchmakingView: View {
                     .disabled(topCard == nil)
                     
                     Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                            offset = CGSize(width: 500, height: 0)
-                        }
                         handleSwipe(isMatch: true)
                     } label: {
                         Image(systemName: "heart.fill")
