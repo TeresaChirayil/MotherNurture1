@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 //////
 //////  FinalTouchView.swift
 //////  MotherNurture1
@@ -341,8 +341,7 @@
 //
 //
 
-=======
->>>>>>> Ashley
+
 //
 //  FinalTouchView.swift
 //  MotherNurture1

@@ -315,6 +315,14 @@ struct PostDetailView: View {
             return
         }
         
+        // Filter content for inappropriate language
+        let filterResult = ContentFilterService.shared.filterContent(trimmedContent)
+        if !filterResult.isSafe {
+            errorMessage = filterResult.reason ?? "Your comment contains inappropriate content. Please keep comments respectful and family-friendly."
+            showError = true
+            return
+        }
+        
         // Determine authorName based on anonymity toggle
         let displayName: String
         if commentAnonymously {

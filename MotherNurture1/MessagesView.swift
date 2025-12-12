@@ -13,6 +13,8 @@ struct MessagesView: View {
     @State private var newMessage: String = ""
     @State private var showBlockConfirmation = false
     @State private var showReportConfirmation = false
+    @State private var showFilterError = false
+    @State private var filterErrorMessage = ""
     
     struct ChatMessage: Identifiable {
         let id = UUID()
@@ -145,12 +147,30 @@ struct MessagesView: View {
         } message: {
             Text("Report this user or content for inappropriate behavior?")
         }
+        .alert("Message Blocked", isPresented: $showFilterError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(filterErrorMessage)
+        }
     }
     
     private func sendMessage() {
-        guard !newMessage.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        let trimmedMessage = newMessage.trimmingCharacters(in: .whitespaces)
+        guard !trimmedMessage.isEmpty else { return }
+        
+        // Filter content before sending
+        let filterResult = ContentFilterService.shared.filterContent(trimmedMessage)
+        
+        if !filterResult.isSafe {
+            // Show error message to user
+            filterErrorMessage = filterResult.reason ?? "Your message contains inappropriate content"
+            showFilterError = true
+            return
+        }
+        
+        // Content is safe, send the message
         withAnimation {
-            messages.append(ChatMessage(text: newMessage, isUser: true))
+            messages.append(ChatMessage(text: trimmedMessage, isUser: true))
             newMessage = ""
         }
     }
