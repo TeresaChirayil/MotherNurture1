@@ -360,6 +360,7 @@ struct CardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // Main content container
             // Image Area: bold, full-width header at fixed height
             ZStack(alignment: .bottomLeading) {
                 // Show photo from URL if available, otherwise asset name, otherwise green placeholder
@@ -374,7 +375,7 @@ struct CardView: View {
                             image
                                 .resizable()
                                 .scaledToFill()
-                                .frame(height: 350)
+                                .frame(width: nil, height: 350)
                                 .clipped()
                         case .failure:
                             // Failed to load - show green placeholder
@@ -389,7 +390,7 @@ struct CardView: View {
                     Image(assetName)
                     .resizable()
                     .scaledToFill()
-                    .frame(height: 350)
+                    .frame(width: nil, height: 350)
                     .clipped()
                 } else {
                     // No photo - show green placeholder
@@ -454,6 +455,7 @@ struct CardView: View {
                     )
                 )
             }
+            .frame(height: 350)
 
             VStack(alignment: .leading, spacing: 15) {
                 // FlowLayout to display all groups
@@ -500,6 +502,7 @@ struct CardView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.white)
         }
+        .fixedSize(horizontal: false, vertical: true)
         .cornerRadius(20)
         .shadow(color: Color.black.opacity(0.15), radius: 10, x: 0, y: 5)
         .confirmationDialog("Block User", isPresented: $showBlockConfirmation, titleVisibility: .visible) {
@@ -670,10 +673,8 @@ struct MatchmakingView: View {
                                 handleGroupTap(group)
                             })
                             .environmentObject(userDataManager)
-                                .frame(maxWidth: maxCardWidth, alignment: .center)
-                                .padding(.bottom, 1)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: maxHeight)
+                                .frame(width: maxCardWidth)
+                                .frame(maxHeight: maxHeight)
                                 .background(Color.clear)
                                 .offset(offset)
                                 .rotationEffect(.degrees(rotation))
