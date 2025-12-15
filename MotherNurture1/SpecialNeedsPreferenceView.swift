@@ -109,7 +109,7 @@ struct SpecialNeedsPreferenceView: View {
                     .padding(.bottom, 40)
                 }
                         .navigationDestination(isPresented: $navigateToLanguagePreferences) {
-                            LanguagePreferencesView()
+                            FinalTouchView()
                                 .environmentObject(userDataManager)
                         }
             }
