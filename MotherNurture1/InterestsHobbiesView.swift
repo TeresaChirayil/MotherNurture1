@@ -77,16 +77,18 @@ struct InterestsHobbiesView: View {
                                 }
                                 
                                 if showingCustomInterestField {
-                                    VStack(alignment: .leading, spacing: 8) {
+                                    VStack(alignment: .leading, spacing: 12) {
                                         HStack(spacing: 8) {
                                             TextField("Type your interest...", text: $customInterestText)
-                                                .padding(12)
+                                                .padding(.horizontal, 12)
+                                                .frame(height: 56)
                                                 .background(Color(hex: "D4C4B0"))
-                                                .cornerRadius(8)
+                                                .cornerRadius(12)
                                                 .foregroundColor(Color(hex: "5C3D2E"))
                                                 .font(.system(size: 16, design: .rounded))
                                                 .textInputAutocapitalization(.words)
                                                 .disableAutocorrection(true)
+                                            
                                             Button(action: {
                                                 let trimmed = customInterestText.trimmingCharacters(in: .whitespacesAndNewlines)
                                                 guard !trimmed.isEmpty else { return }
@@ -103,26 +105,29 @@ struct InterestsHobbiesView: View {
                                             }
                                             .buttonStyle(.plain)
                                         }
-                                        // Show chips for custom interests with an X to remove
-                                        InterestsFlowLayout(spacing: 8) {
+                                        
+                                        // Custom interests displayed like other options, with a removable X
+                                        VStack(spacing: 10) {
                                             ForEach(Array(selectedInterests).filter { !interests.contains($0) }, id: \.self) { custom in
-                                                HStack(spacing: 6) {
+                                                HStack {
                                                     Text(custom)
-                                                        .font(.system(size: 14, weight: .medium, design: .rounded))
+                                                        .font(.system(size: 18, weight: .medium, design: .rounded))
                                                         .foregroundColor(Color(hex: "5C3D2E"))
-                                                        .padding(.leading, 12)
-                                                    Button(action: {
+                                                    Spacer()
+                                                    Button {
                                                         selectedInterests.remove(custom)
-                                                    }) {
+                                                    } label: {
                                                         Image(systemName: "xmark.circle.fill")
-                                                            .foregroundColor(Color(hex: "5C3D2E").opacity(0.8))
-                                                            .font(.system(size: 14, weight: .bold))
+                                                            .foregroundColor(Color(hex: "5C3D2E"))
+                                                            .font(.system(size: 20, weight: .bold))
                                                     }
                                                     .buttonStyle(.plain)
                                                 }
-                                                .padding(.vertical, 8)
+                                                .padding(.horizontal, 16)
+                                                .frame(maxWidth: .infinity)
+                                                .frame(height: 56)
                                                 .background(Color(hex: "D4C4B0"))
-                                                .cornerRadius(20)
+                                                .cornerRadius(12)
                                             }
                                         }
                                     }
