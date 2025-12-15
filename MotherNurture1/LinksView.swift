@@ -1,9 +1,9 @@
 ////
-//  LinksView.swift
-//  MotherNurture1
-//
-//  Created by 40 GO Participant on 11/4/25.
-//
+////  LinksView.swift
+////  MotherNurture1
+////
+////  Created by 40 GO Participant on 11/4/25.
+////
 import SwiftUI
 
 // Custom Brand Colors based on tutorial view
@@ -154,11 +154,11 @@ struct CardView: View {
     @State private var showReportConfirmation = false
 
     // Tunables for compact layout (non-scrollable content)
-    private let headerHeight: CGFloat = 300 // increased to show more of the photo/green area
+    private let headerHeight: CGFloat = 360 // taller photo/green area
     private let contentSpacing: CGFloat = 2    // tight spacing again
-    private let chipSpacing: CGFloat = 6
+    private let chipSpacing: CGFloat = 4
     private let maxBioLines: Int = 3
-    private let maxTagRows: Int = 2
+    private let maxTagRows: Int = 1
     
     var body: some View {
         GeometryReader { geo in
@@ -271,40 +271,41 @@ struct CardView: View {
                                     onGroupTapped(group)
                                 } label: {
                                     Text(group)
-                                        .font(.caption)
+                                        .font(.callout)
                                         .fontWeight(.bold)
                                         .foregroundColor(.white)
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 3)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
                                         .background(Color.connectGreen)
-                                        .cornerRadius(10)
+                                        .cornerRadius(12)
                                 }
                                 .buttonStyle(.plain)
                             }
                         }
                         .padding(.top, 4)
-                        .padding(.bottom, 6) // increased for consistent gap to bio
+                        .padding(.bottom, 8)
                         .background(Color.white)
                     }
                     
                     if isTop {
                         // Bio (slightly more breathing room)
                         Text(profile.bio)
-                            .font(.body)
+                            .font(.title3)
                             .foregroundColor(.primaryText)
-                            .lineLimit(maxBioLines)
+                            .lineLimit(3)
                             .fixedSize(horizontal: false, vertical: true)
-                            .padding(.top, 4)
-                            .padding(.bottom, 4)
+                            .padding(.top, 6)
+                            .padding(.bottom, 8)
                         
                         // Tags: show up to maxTagRows, then add "+N more"
                         TagRowsView(tags: profile.tags, chipSpacing: chipSpacing, maxRows: maxTagRows)
-                            .padding(.top, 6) // gap from bio to tags
+                            .padding(.top, 8)
+                            .padding(.bottom, 4)
                     }
                 }
-                .padding(.horizontal, 12)
-                .padding(.top, 8)
-                .padding(.bottom, 4)
+                .padding(.horizontal, 10)
+                .padding(.top, 4)
+                .padding(.bottom, 2)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color.white)
             }
@@ -368,73 +369,280 @@ struct CardView: View {
     }
 }
 
-// Helper: Tags with capped rows and “+N more”
+// Tags with capped rows and “+N more”
 private struct TagRowsView: View {
     let tags: [String]
     let chipSpacing: CGFloat
     let maxRows: Int
-    
-    @State private var availableWidth: CGFloat = 0
-    
+
+    @State private var selectedTag: String? = nil
+    @State private var isTooltipVisible: Bool = false
+
+    // Track truncation state for each tag by its exact string
+    @State private var truncated: [String: Bool] = [:]
+
     var body: some View {
         GeometryReader { geo in
             content(for: geo.size.width)
         }
-        .frame(minHeight: 0) // compact
+        .frame(minHeight: 0)
     }
-    
+
     private func buildRows(for width: CGFloat) -> [[String]] {
         var rows: [[String]] = [[]]
         var currentRowWidth: CGFloat = 0
-        
+
         let paddingH: CGFloat = 6 + 6 // approximate left+right inside chip
         let chipSpacing = chipSpacing
         let font = UIFont.systemFont(ofSize: 12)
-        
+
+        func chipWidth(for label: String) -> CGFloat {
+            let labelWidth = label.size(withAttributes: [.font: font]).width
+            return labelWidth + paddingH + 12 // include background + some fudge factor
+        }
+
         for tag in tags {
-            let labelWidth = tag.size(withAttributes: [.font: font]).width
-            let chipWidth = labelWidth + paddingH + 12 // include background + some fudge factor
-            
-            if currentRowWidth + chipWidth + (rows.last!.isEmpty ? 0 : chipSpacing) <= width {
+            let widthNeeded = chipWidth(for: tag)
+            if currentRowWidth + widthNeeded + (rows.last!.isEmpty ? 0 : chipSpacing) <= width {
                 rows[rows.count - 1].append(tag)
-                currentRowWidth += chipWidth + (rows.last!.count == 1 ? 0 : chipSpacing)
+                currentRowWidth += widthNeeded + (rows.last!.count == 1 ? 0 : chipSpacing)
             } else {
                 if rows.count < maxRows {
                     rows.append([tag])
-                    currentRowWidth = chipWidth
+                    currentRowWidth = widthNeeded
                 } else {
-                    // No more rows — compute remaining and add a "+N more" chip
-                    let remaining = tags.count - rows.flatMap { $0 }.count
-                    if remaining > 0 {
-                        rows[rows.count - 1].append("+\(remaining) more")
-                    }
                     break
                 }
             }
         }
-        return rows
-    }
-    
-    private func content(for width: CGFloat) -> some View {
-        let rows = buildRows(for: width)
-        let chipHeight: CGFloat = 24
-        
-        return VStack(alignment: .leading, spacing: chipSpacing) {
-            ForEach(0..<rows.count, id: \.self) { rowIndex in
-                HStack(spacing: chipSpacing) {
-                    ForEach(rows[rowIndex], id: \.self) { tag in
-                        Text(tag)
-                            .font(.caption)
-                            .foregroundColor(.primaryText)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 5)
-                            .background(Color.cardAccent.opacity(0.2))
-                            .cornerRadius(8)
+
+        let placedCount = rows.flatMap { $0 }.count
+        let remaining = max(0, tags.count - placedCount)
+
+        if remaining > 0, var lastRow = rows.last {
+            if remaining == 1 {
+                let lastVisibleIndex = placedCount
+                if lastVisibleIndex < tags.count {
+                    let singleHidden = tags[lastVisibleIndex]
+                    let singleHiddenWidth = chipWidth(for: singleHidden)
+                    let currentWidth = lastRow.reduce(CGFloat(0)) { partial, label in
+                        let w = chipWidth(for: label)
+                        return partial + (partial == 0 ? w : (w + chipSpacing))
+                    }
+                    if currentWidth + (currentWidth == 0 ? 0 : chipSpacing) + singleHiddenWidth <= width {
+                        lastRow.append(singleHidden)
+                        rows[rows.count - 1] = lastRow
+                    } else {
+                        let moreLabel = "+1 more"
+                        let moreWidth = chipWidth(for: moreLabel)
+                        if currentWidth + (currentWidth == 0 ? 0 : chipSpacing) + moreWidth <= width {
+                            lastRow.append(moreLabel)
+                            rows[rows.count - 1] = lastRow
+                        }
                     }
                 }
-                .frame(height: chipHeight, alignment: .leading)
+            } else {
+                let moreLabel = "+\(remaining) more"
+                let moreWidth = chipWidth(for: moreLabel)
+                let currentWidth = lastRow.reduce(CGFloat(0)) { partial, label in
+                    let w = chipWidth(for: label)
+                    return partial + (partial == 0 ? w : (w + chipSpacing))
+                }
+                if currentWidth + (currentWidth == 0 ? 0 : chipSpacing) + moreWidth <= width {
+                    lastRow.append(moreLabel)
+                    rows[rows.count - 1] = lastRow
+                }
             }
         }
+
+        return rows
+    }
+
+    private func content(for width: CGFloat) -> some View {
+        let rows = buildRows(for: width)
+
+        return VStack(alignment: .leading, spacing: chipSpacing) {
+            ForEach(0..<rows.count, id: \.self) { rowIndex in
+                HStack(alignment: .center, spacing: chipSpacing) {
+                    ForEach(rows[rowIndex], id: \.self) { tag in
+                        ZStack(alignment: .top) {
+                            ChipLabel(title: tag, chipSpacing: chipSpacing, truncated: $truncated)
+                                .frame(height: 32) // lock chip height for even rows
+                                .contentShape(RoundedRectangle(cornerRadius: 10))
+                                .onTapGesture {
+                                    var shouldShow = false
+                                    var displayText: String? = nil
+
+                                    if tag.hasPrefix("+") && tag.contains("more") {
+                                        let allVisible = rows.flatMap { $0 }.filter { !$0.hasPrefix("+") }
+                                        let hidden = Array(tags.dropFirst(allVisible.count))
+                                        if hidden.count == 1, let only = hidden.first {
+                                            displayText = only
+                                        } else if hidden.count > 1 {
+                                            displayText = hidden.joined(separator: ", ")
+                                        }
+                                        shouldShow = displayText != nil
+                                    } else {
+                                        shouldShow = truncated[tag] == true
+                                        displayText = tag
+                                    }
+
+                                    if shouldShow, let text = displayText {
+                                        withAnimation(.easeInOut) {
+                                            if isTooltipVisible && selectedTag == text {
+                                                isTooltipVisible = false
+                                                selectedTag = nil
+                                            } else {
+                                                selectedTag = text
+                                                isTooltipVisible = true
+                                            }
+                                        }
+                                    } else if isTooltipVisible {
+                                        withAnimation(.easeInOut) {
+                                            isTooltipVisible = false
+                                            selectedTag = nil
+                                        }
+                                    }
+                                }
+
+                            if isTooltipVisible && selectedTag == (tag.hasPrefix("+") && tag.contains("more")
+                                                                    ? {
+                                                                        let allVisible = rows.flatMap { $0 }.filter { !$0.hasPrefix("+") }
+                                                                        let hidden = Array(tags.dropFirst(allVisible.count))
+                                                                        if hidden.count == 1, let only = hidden.first { return only }
+                                                                        if hidden.count > 1 { return hidden.joined(separator: ", ") }
+                                                                        return nil
+                                                                      }()
+                                                                    : tag) {
+                                let bubbleText: String = {
+                                    if tag.hasPrefix("+") && tag.contains("more") {
+                                        let allVisible = rows.flatMap { $0 }.filter { !$0.hasPrefix("+") }
+                                        let hidden = Array(tags.dropFirst(allVisible.count))
+                                        if hidden.isEmpty { return "" }
+                                        // Bullet each hidden tag on a new line
+                                        return hidden.map { "• \($0)" }.joined(separator: "\n")
+                                    } else {
+                                        return selectedTag ?? ""
+                                    }
+                                }()
+
+                                TooltipBubble(text: bubbleText)
+                                    .offset(y: -44)
+                                    .transition(.opacity)
+                                    .zIndex(1)
+                            }
+                        }
+                    }
+                }
+                .frame(maxHeight: .infinity, alignment: .leading)
+            }
+        }
+        .onTapGesture {
+            if isTooltipVisible {
+                withAnimation(.easeInOut) {
+                    isTooltipVisible = false
+                    selectedTag = nil
+                }
+            }
+        }
+        .contentShape(Rectangle())
+    }
+}
+
+// A chip label that measures whether its text is truncated in the given layout
+private struct ChipLabel: View {
+    let title: String
+    let chipSpacing: CGFloat
+
+    @Binding var truncated: [String: Bool]
+
+    // We render the visible text with lineLimit(1) and also render an invisible
+    // reference that measures the intrinsic size to compare.
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            Text(title)
+                .font(.callout)
+                .foregroundColor(.primaryText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.9)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.cardAccent.opacity(0.2))
+                .cornerRadius(10)
+                .overlay(
+                    GeometryReader { visibleGeo in
+                        Color.clear
+                            .onAppear { updateTruncation(visibleSize: visibleGeo.size) }
+                            .onChange(of: visibleGeo.size) { _, newSize in
+                                updateTruncation(visibleSize: newSize)
+                            }
+                    }
+                )
+                .accessibilityLabel(Text(title))
+
+            // Hidden reference text to get intrinsic width without line limit
+            Text(title)
+                .font(.callout)
+                .foregroundColor(.clear)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.clear)
+                .overlay(
+                    GeometryReader { fullGeo in
+                        Color.clear
+                            .preference(key: IntrinsicWidthKey.self, value: fullGeo.size.width)
+                    }
+                )
+                .hidden()
+        }
+        .onPreferenceChange(IntrinsicWidthKey.self) { fullWidth in
+            // Compare fullWidth with the visible width captured in updateTruncation
+            // The visible width is stored via the latest measurement
+            // Because we can't store both in a single pass here, updateTruncation stores into truncated[title]
+        }
+    }
+
+    private func updateTruncation(visibleSize: CGSize) {
+        let font = UIFont.preferredFont(forTextStyle: .callout)
+        let attributes: [NSAttributedString.Key: Any] = [.font: font]
+        let intrinsicTextWidth = (title as NSString).size(withAttributes: attributes).width
+        let intrinsic = intrinsicTextWidth + 10 + 10 // horizontal padding
+        let isTruncated = intrinsic > visibleSize.width
+        if truncated[title] != isTruncated {
+            truncated[title] = isTruncated
+        }
+    }
+}
+
+private struct IntrinsicWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+// Readable tooltip bubble used for truncated tags and "+N more" details
+private struct TooltipBubble: View {
+    let text: String
+    var body: some View {
+        Text(text)
+            .font(.footnote)
+            .foregroundColor(.white)
+            .multilineTextAlignment(.leading)
+            .lineLimit(nil)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.black.opacity(0.55))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color.white.opacity(0.12), lineWidth: 0.5)
+            )
+            .frame(maxWidth: 220, alignment: .leading) // cap width for readability
+            .shadow(color: Color.black.opacity(0.25), radius: 6, x: 0, y: 2)
     }
 }
 
@@ -446,8 +654,6 @@ struct MatchmakingView: View {
     @State private var offset: CGSize = .zero
     @State private var lastOffset: CGSize = .zero
     @State private var feedbackText: String? = nil
-    @State private var showMatchPopup: Bool = false
-    @State private var matchedProfile: Profile? = nil
     @State private var navigateToMessages: Bool = false
     @State private var groupToNavigateTo: Channel? = nil
     @State private var showError: Bool = false
@@ -465,13 +671,24 @@ struct MatchmakingView: View {
         profiles.first
     }
     
+    // Handle swipe by animating and removing the top card. No matchmaking/like recording.
+    private func handleSwipe(isMatch: Bool) {
+        guard !isAnimatingSwipe else { return }
+        if topCard != nil {
+            performSwipeAnimation(isMatch: isMatch)
+            if profiles.count <= 1 {
+                Task { await loadProfiles() }
+            }
+        }
+    }
+    
     private func performSwipeAnimation(isMatch: Bool) {
         guard topCard != nil else { return }
         guard !isAnimatingSwipe else { return }
         isAnimatingSwipe = true
         
-        let targetOffset = CGSize(width: isMatch ? 500 : -500, height: 0)
-        let springAnimation = Animation.spring(response: 0.2, dampingFraction: 0.5)
+        let targetOffset = CGSize(width: isMatch ? 650 : -650, height: 0)
+        let springAnimation = Animation.spring(response: 0.55, dampingFraction: 0.55)
         
         lastOffset = .zero
         
@@ -479,7 +696,7 @@ struct MatchmakingView: View {
             offset = targetOffset
         }
         
-        let animationCompletionTime = 0.5
+        let animationCompletionTime = 0.35
         
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: UInt64(animationCompletionTime * 1_000_000_000))
@@ -491,21 +708,6 @@ struct MatchmakingView: View {
                 lastOffset = .zero
             }
             isAnimatingSwipe = false
-        }
-    }
-    
-    private func handleSwipe(isMatch: Bool) {
-        guard !isAnimatingSwipe else { return }
-        if let card = topCard {
-            if isMatch {
-                matchedProfile = card
-                showMatchPopup = true
-            }
-            performSwipeAnimation(isMatch: isMatch)
-            
-            if profiles.count <= 1 {
-                Task { await loadProfiles() }
-            }
         }
     }
     
@@ -544,7 +746,7 @@ struct MatchmakingView: View {
                             })
                             .environmentObject(userDataManager)
                             .frame(maxWidth: .infinity)
-                            .padding(.horizontal, 16)
+                            .padding(.horizontal, 24)
                             .background(Color.clear)
                             .offset(offset)
                             .rotationEffect(.degrees(rotation))
@@ -648,77 +850,12 @@ struct MatchmakingView: View {
                 
                 Spacer(minLength: 0)
             }
-            .fullScreenCover(isPresented: $showMatchPopup) {
-                if let profile = matchedProfile {
-                    ZStack {
-                        Color.black.opacity(0.4)
-                            .ignoresSafeArea()
-                        
-                        VStack(spacing: 16) {
-                            Text("🎉 It’s a Match!")
-                                .font(.title)
-                                .fontWeight(.bold)
-                                .foregroundColor(.primaryText)
-                            
-                            Text("You and \(profile.name) matched!")
-                                .font(.headline)
-                                .foregroundColor(.primaryText)
-                            
-                            HStack(spacing: 16) {
-                                Button(action: {
-                                    if let profile = matchedProfile {
-                                        let newChannel = Channel(
-                                            name: profile.name.trimmingCharacters(in: .whitespaces),
-                                            timeAgo: "now",
-                                            isDirectMessage: true
-                                        )
-                                        ChannelsManager.shared.addChannel(newChannel)
-                                    }
-                                    navigateToMessages = true
-                                    showMatchPopup = false
-                                }) {
-                                    Text("Message")
-                                        .font(.headline)
-                                        .foregroundColor(.white)
-                                        .padding()
-                                        .frame(maxWidth: 130)
-                                        .background(Color.connectGreen)
-                                        .cornerRadius(12)
-                                }
-                                
-                                Button(action: {
-                                    showMatchPopup = false
-                                }) {
-                                    Text("Keep Swiping")
-                                        .font(.headline)
-                                        .foregroundColor(.primaryText)
-                                        .padding()
-                                        .frame(maxWidth: 130)
-                                        .background(Color.white)
-                                        .cornerRadius(12)
-                                        .shadow(radius: 2)
-                                }
-                            }
-                        }
-                        .padding()
-                        .background(Color.white)
-                        .cornerRadius(20)
-                        .padding(32)
-                    }
-                } else {
-                    Color.clear.ignoresSafeArea()
-                }
-            }
             .background(Color.appBackground.ignoresSafeArea())
+            // Removed fullScreenCover for match popup
+            
             .navigationDestination(isPresented: $navigateToMessages) {
-                if let profile = matchedProfile {
-                    let channelName = profile.name.trimmingCharacters(in: .whitespaces)
-                    MessagesView(channel: Channel(name: channelName, timeAgo: "now", isDirectMessage: true))
-                        .environmentObject(userDataManager)
-                } else {
-                    MessagesView(channel: Channel(name: "Direct Message", timeAgo: "now", isDirectMessage: true))
-                        .environmentObject(userDataManager)
-                }
+                MessagesView(channel: Channel(name: "Direct Message", timeAgo: "now", isDirectMessage: true))
+                    .environmentObject(userDataManager)
             }
             .navigationDestination(item: $groupToNavigateTo) { channel in
                 MessagesView(channel: channel)
@@ -882,7 +1019,7 @@ struct MatchmakingView_Previews: PreviewProvider {
 }
 
 /*
- // LEGACY LinksView (commented out as requested). This older view also defined another `Profile` type,
+ // LinksView (commented out). This older view also defined another `Profile` type,
  // which conflicted with the matchmaking Profile. Keeping it commented avoids identity/rendering issues.
  
  import SwiftUI
@@ -1064,3 +1201,4 @@ struct MatchmakingView_Previews: PreviewProvider {
      let image: String
  }
 */
+
