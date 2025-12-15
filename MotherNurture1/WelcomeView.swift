@@ -11,6 +11,7 @@ struct WelcomeView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var userDataManager: UserDataManager
     @State private var navigateToLocation = false
+    @State private var navigateToSignUp = false
     
     var body: some View {
         NavigationStack {
@@ -23,7 +24,7 @@ struct WelcomeView: View {
                 // Top Navigation - Back button
                 HStack {
                     Button(action: {
-                        dismiss()
+                        navigateToSignUp = true
                     }) {
                         HStack(spacing: 4) {
                             Image(systemName: "chevron.left")
@@ -83,6 +84,10 @@ struct WelcomeView: View {
                 }
                 .navigationDestination(isPresented: $navigateToLocation) {
                     LocationOnboardingView()
+                        .environmentObject(userDataManager)
+                }
+                .navigationDestination(isPresented: $navigateToSignUp) {
+                    SignUpView()
                         .environmentObject(userDataManager)
                 }
             }

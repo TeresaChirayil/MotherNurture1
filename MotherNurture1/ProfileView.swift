@@ -7,6 +7,7 @@
 
 import SwiftUI
 import FirebaseAuth
+import FirebaseStorage
 
 struct ProfileView: View {
     @EnvironmentObject var userDataManager: UserDataManager
@@ -514,23 +515,28 @@ struct ProfileView: View {
         userDataManager.profile.interests = Array(editedInterests)
         userDataManager.profile.dateOfBirth = editedDateOfBirth
         
-        // Handle profile picture: preserve existing photoURL if no new image selected
-        // If a new image was selected, save it (for now as placeholder URL)
-        // In production, you'd upload to Firebase Storage and get a URL
-        if let _ = selectedImage {
-            // Only update photoURL if a new image was selected
-            // This preserves the existing photoURL if user didn't change the image
-            let newPhotoURL = "selected_image_\(UUID().uuidString)"
-            userDataManager.profile.photoURL = newPhotoURL
-            print("🔥 [ProfileView] New image selected, saving to profile")
-        } else {
-            // If no new image selected, preserve the original photoURL
-            userDataManager.profile.photoURL = originalPhotoURL
-        }
+        // We'll handle image upload (if any) before saving to Firebase below
         
-        // Save to Firebase
         Task {
             do {
+                // If a new image was selected, upload it first and set photoURL
+                if let image = selectedImage, let imageData = image.jpegData(compressionQuality: 0.8) {
+                    // Require a user ID for naming; get one if possible
+                    let userID: String
+                    if let existingID = userDataManager.profile.userID {
+                        userID = existingID
+                    } else if let anonymousID = try? await FirebaseService.shared.signInAnonymously() {
+                        userID = anonymousID
+                    } else {
+                        userID = UUID().uuidString
+                    }
+                    let fileName = "profile_\(userID).jpg"
+                    let storageRef = Storage.storage().reference().child("profile_photos/\(fileName)")
+                    _ = try await storageRef.putDataAsync(imageData, metadata: nil)
+                    let downloadURL = try await storageRef.downloadURL()
+                    userDataManager.profile.photoURL = downloadURL.absoluteString
+                }
+                // Save to Firebase
                 try await userDataManager.saveToFirebase()
                 await MainActor.run {
                     // Clear selectedImage after successful save so photoURL persists
@@ -677,3 +683,4 @@ struct ProfileView: View {
     return ProfileView()
         .environmentObject(previewManager)
 }
+

@@ -13,6 +13,9 @@ struct InterestsHobbiesView: View {
     @State private var selectedInterests: Set<String> = []
     @State private var navigateToConnectionPreference = false
     
+    @State private var showingCustomInterestField: Bool = false
+    @State private var customInterestText: String = ""
+    
     let interests = [
         "Reading",
         "Cooking",
@@ -52,6 +55,10 @@ struct InterestsHobbiesView: View {
                             VStack(spacing: 16) {
                                 ForEach(interests, id: \.self) { interest in
                                     Button(action: {
+                                        if interest == "Anything!" {
+                                            withAnimation { showingCustomInterestField.toggle() }
+                                            return
+                                        }
                                         if selectedInterests.contains(interest) {
                                             selectedInterests.remove(interest)
                                         } else {
@@ -67,6 +74,59 @@ struct InterestsHobbiesView: View {
                                             .cornerRadius(12)
                                     }
                                     .buttonStyle(PlainButtonStyle())
+                                }
+                                
+                                if showingCustomInterestField {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        HStack(spacing: 8) {
+                                            TextField("Type your interest...", text: $customInterestText)
+                                                .padding(12)
+                                                .background(Color(hex: "D4C4B0"))
+                                                .cornerRadius(8)
+                                                .foregroundColor(Color(hex: "5C3D2E"))
+                                                .font(.system(size: 16, design: .rounded))
+                                                .textInputAutocapitalization(.words)
+                                                .disableAutocorrection(true)
+                                            Button(action: {
+                                                let trimmed = customInterestText.trimmingCharacters(in: .whitespacesAndNewlines)
+                                                guard !trimmed.isEmpty else { return }
+                                                selectedInterests.insert(trimmed)
+                                                customInterestText = ""
+                                            }) {
+                                                Text("Add")
+                                                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                                    .foregroundColor(.white)
+                                                    .padding(.horizontal, 14)
+                                                    .padding(.vertical, 10)
+                                                    .background(Color(hex: "8B9A7E"))
+                                                    .cornerRadius(8)
+                                            }
+                                            .buttonStyle(.plain)
+                                        }
+                                        // Show chips for custom interests with an X to remove
+                                        InterestsFlowLayout(spacing: 8) {
+                                            ForEach(Array(selectedInterests).filter { !interests.contains($0) }, id: \.self) { custom in
+                                                HStack(spacing: 6) {
+                                                    Text(custom)
+                                                        .font(.system(size: 14, weight: .medium, design: .rounded))
+                                                        .foregroundColor(Color(hex: "5C3D2E"))
+                                                        .padding(.leading, 12)
+                                                    Button(action: {
+                                                        selectedInterests.remove(custom)
+                                                    }) {
+                                                        Image(systemName: "xmark.circle.fill")
+                                                            .foregroundColor(Color(hex: "5C3D2E").opacity(0.8))
+                                                            .font(.system(size: 14, weight: .bold))
+                                                    }
+                                                    .buttonStyle(.plain)
+                                                }
+                                                .padding(.vertical, 8)
+                                                .background(Color(hex: "D4C4B0"))
+                                                .cornerRadius(20)
+                                            }
+                                        }
+                                    }
+                                    .padding(.top, 4)
                                 }
                             }
                             .padding(.horizontal, 40)
@@ -130,3 +190,40 @@ struct InterestsHobbiesView: View {
     InterestsHobbiesView()
 }
 
+struct InterestsFlowLayout: Layout {
+    var spacing: CGFloat = 8
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x + size.width > maxWidth, x > 0 {
+                x = 0
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            rowHeight = max(rowHeight, size.height)
+            x += size.width + spacing
+        }
+        return CGSize(width: maxWidth, height: y + rowHeight)
+    }
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let maxWidth = bounds.width
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x + size.width > maxWidth, x > 0 {
+                x = 0
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            subview.place(at: CGPoint(x: bounds.minX + x, y: bounds.minY + y), proposal: .unspecified)
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+    }
+}

@@ -10,8 +10,8 @@ import SwiftUI
 struct FamilyInfoView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var userDataManager: UserDataManager
-    @State private var numberOfChildren: Int = 1
-    @State private var childAges: [Int] = [1]
+    @State private var numberOfChildren: Int = 0
+    @State private var childAges: [Int] = []
     @State private var navigateToAboutYou = false
     
     var body: some View {
@@ -42,10 +42,10 @@ struct FamilyInfoView: View {
                                 
                                 HStack {
                                     Button(action: {
-                                        if numberOfChildren > 1 {
+                                        if numberOfChildren > 0 {
                                             numberOfChildren -= 1
-                                            // Remove the last child's age from the array
-                                            if childAges.count >= numberOfChildren {
+                                            // Trim ages array to match the new count (can be 0)
+                                            if childAges.count > numberOfChildren {
                                                 childAges = Array(childAges.prefix(numberOfChildren))
                                             }
                                         }
