@@ -15,6 +15,10 @@ class UserDataManager: ObservableObject {
     
     @Published var profile: UserProfile
     @Published var isAuthenticated: Bool = false
+
+    var authUserID: String? {
+        Auth.auth().currentUser?.uid
+    }
     
     private let firebaseService = FirebaseService.shared
     

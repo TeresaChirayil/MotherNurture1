@@ -155,3 +155,57 @@ struct PostLike: Identifiable {
     }
 }
 
+// MARK: - Message Model
+struct Message: Identifiable {
+    var id: String?
+    var channelID: String // Channel name or ID
+    var text: String
+    var authorID: String
+    var authorName: String
+    var createdAt: Timestamp
+    var updatedAt: Timestamp
+    
+    init(id: String? = nil, channelID: String, text: String, authorID: String, authorName: String, createdAt: Timestamp? = nil, updatedAt: Timestamp? = nil) {
+        self.id = id
+        self.channelID = channelID
+        self.text = text
+        self.authorID = authorID
+        self.authorName = authorName
+        self.createdAt = createdAt ?? Timestamp(date: Date())
+        self.updatedAt = updatedAt ?? Timestamp(date: Date())
+    }
+    
+    func toDictionary() -> [String: Any] {
+        return [
+            "channelID": channelID,
+            "text": text,
+            "authorID": authorID,
+            "authorName": authorName,
+            "createdAt": createdAt,
+            "updatedAt": updatedAt
+        ]
+    }
+    
+    static func fromDictionary(_ data: [String: Any], id: String) -> Message? {
+        guard let channelID = data["channelID"] as? String,
+              let text = data["text"] as? String,
+              let authorID = data["authorID"] as? String,
+              let authorName = data["authorName"] as? String,
+              let createdAt = data["createdAt"] as? Timestamp,
+              let updatedAt = data["updatedAt"] as? Timestamp else {
+            return nil
+        }
+        
+        var message = Message(
+            id: id,
+            channelID: channelID,
+            text: text,
+            authorID: authorID,
+            authorName: authorName
+        )
+        message.createdAt = createdAt
+        message.updatedAt = updatedAt
+        return message
+    }
+}
+

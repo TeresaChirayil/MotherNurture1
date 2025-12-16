@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import FirebaseFirestore
 
 struct MessagesView: View {
     @Environment(\.dismiss) var dismiss
@@ -15,20 +16,23 @@ struct MessagesView: View {
     @State private var showReportConfirmation = false
     @State private var showFilterError = false
     @State private var filterErrorMessage = ""
-    
-    struct ChatMessage: Identifiable {
-        let id = UUID()
-        let text: String
-        let isUser: Bool
-    }
-    
-    @State private var messages: [ChatMessage] = [
-        ChatMessage(text: "Welcome to the chat!", isUser: false),
-        ChatMessage(text: "Feel free to share your experiences here.", isUser: false)
-    ]
+    @State private var messages: [Message] = []
+    @State private var messageListener: ListenerRegistration?
+    @State private var isLoading = true
     
     private var canBlockOrReport: Bool {
         channel.isDirectMessage // Only allow block/report for direct messages
+    }
+    
+    private var currentUserID: String? {
+        userDataManager.authUserID
+    }
+    
+    private var currentUserName: String {
+        let firstName = userDataManager.profile.firstName ?? ""
+        let lastName = userDataManager.profile.lastName ?? ""
+        let fullName = "\(firstName) \(lastName)".trimmingCharacters(in: .whitespaces)
+        return fullName.isEmpty ? "User" : fullName
     }
     
     var body: some View {
@@ -76,34 +80,63 @@ struct MessagesView: View {
                 ScrollViewReader { scrollProxy in
                     ScrollView {
                         VStack(spacing: 10) {
-                            ForEach(messages) { msg in
-                                HStack {
-                                    if msg.isUser {
-                                        Spacer()
-                                        Text(msg.text)
-                                            .padding(10)
-                                            .background(Color(hex: "D7C4B7")) // user’s light brown bubble
-                                            .foregroundColor(Color(hex: "000000"))
-                                            .cornerRadius(12)
-                                            .frame(maxWidth: 240, alignment: .trailing)
-                                    } else {
-                                        Text(msg.text)
-                                            .padding(10)
-                                            .background(Color(hex: "DDE3D0")) // other user’s light green bubble
-                                            .foregroundColor(Color(hex: "000000"))
-                                            .cornerRadius(12)
-                                            .frame(maxWidth: 240, alignment: .leading)
-                                        Spacer()
-                                    }
+                            if isLoading {
+                                ProgressView()
+                                    .padding()
+                            } else if messages.isEmpty {
+                                VStack(spacing: 8) {
+                                    Text("No messages yet")
+                                        .font(.system(size: 16, design: .rounded))
+                                        .foregroundColor(Color(hex: "5C3D2E").opacity(0.6))
+                                    Text("Start the conversation!")
+                                        .font(.system(size: 14, design: .rounded))
+                                        .foregroundColor(Color(hex: "5C3D2E").opacity(0.4))
                                 }
-                                .padding(.horizontal, 20)
+                                .padding(.top, 40)
+                            } else {
+                                ForEach(messages) { msg in
+                                    let isCurrentUser = currentUserID != nil && msg.authorID == currentUserID
+                                    HStack(alignment: .bottom) {
+                                        if isCurrentUser {
+                                            Spacer(minLength: 40)
+                                            Text(msg.text)
+                                                .padding(.vertical, 10)
+                                                .padding(.horizontal, 14)
+                                                .background(Color(hex: "D7C4B7")) // Sent: light brown
+                                                .foregroundColor(Color(hex: "000000"))
+                                                .cornerRadius(14)
+                                                .frame(maxWidth: 260, alignment: .trailing)
+                                                .overlay(
+                                                    RoundedRectangle(cornerRadius: 14)
+                                                        .stroke(Color.black.opacity(0.05), lineWidth: 0.5)
+                                                )
+                                        } else {
+                                            Text(msg.text)
+                                                .padding(.vertical, 10)
+                                                .padding(.horizontal, 14)
+                                                .background(Color(hex: "DDE3D0")) // Received: light green
+                                                .foregroundColor(Color(hex: "000000"))
+                                                .cornerRadius(14)
+                                                .frame(maxWidth: 260, alignment: .leading)
+                                                .overlay(
+                                                    RoundedRectangle(cornerRadius: 14)
+                                                        .stroke(Color.black.opacity(0.05), lineWidth: 0.5)
+                                                )
+                                            Spacer(minLength: 40)
+                                        }
+                                    }
+                                    .padding(.horizontal, 20)
+                                    .id(msg.id)
+                                }
                             }
                         }
                         .padding(.top, 10)
                         // ✅ Updated iOS 17+ syntax
                         .onChange(of: messages.count) {
-                            withAnimation {
-                                scrollProxy.scrollTo(messages.last?.id, anchor: .bottom)
+                            if let last = messages.last {
+                                withAnimation {
+                                    scrollProxy.scrollTo(last.id, anchor: .bottom)
+                                }
                             }
                         }
                     }
@@ -152,29 +185,86 @@ struct MessagesView: View {
         } message: {
             Text(filterErrorMessage)
         }
+        .onAppear {
+            loadMessages()
+            setupMessageListener()
+        }
+        .onDisappear {
+            messageListener?.remove()
+            messageListener = nil
+        }
     }
     
+    private func loadMessages() {
+        Task {
+            do {
+                let fetchedMessages = try await FirebaseService.shared.fetchMessages(channelID: channel.name)
+                await MainActor.run {
+                    messages = fetchedMessages
+                    isLoading = false
+                }
+            } catch {
+                print("❌ Error loading messages: \(error.localizedDescription)")
+                await MainActor.run {
+                    isLoading = false
+                }
+            }
+        }
+    }
+    
+    private func setupMessageListener() {
+        // Remove existing listener if any
+        messageListener?.remove()
+        
+        // Set up real-time listener
+        messageListener = FirebaseService.shared.listenToMessages(channelID: channel.name) { updatedMessages in
+            Task { @MainActor in
+                self.messages = updatedMessages
+                self.isLoading = false
+            }
+        }
+    }
     private func sendMessage() {
         let trimmedMessage = newMessage.trimmingCharacters(in: .whitespaces)
         guard !trimmedMessage.isEmpty else { return }
-        
-        // Filter content before sending
+
+        guard let authUID = userDataManager.authUserID else {
+            print("❌ Cannot send message: not authenticated")
+            return
+        }
+
+        // Filter content
         let filterResult = ContentFilterService.shared.filterContent(trimmedMessage)
-        
         if !filterResult.isSafe {
-            // Show error message to user
             filterErrorMessage = filterResult.reason ?? "Your message contains inappropriate content"
             showFilterError = true
             return
         }
-        
-        // Content is safe, send the message
-        withAnimation {
-            messages.append(ChatMessage(text: trimmedMessage, isUser: true))
-            newMessage = ""
+
+        let message = Message(
+            channelID: channel.name,
+            text: trimmedMessage,
+            authorID: authUID,
+            authorName: currentUserName,
+            createdAt: Timestamp(),
+            updatedAt: Timestamp()
+        )
+
+        newMessage = ""
+
+        Task {
+            do {
+                try await FirebaseService.shared.sendMessage(message)
+                print("✅ Message sent as \(authUID)")
+            } catch {
+                print("❌ Message send failed:", error.localizedDescription)
+                await MainActor.run {
+                    newMessage = trimmedMessage
+                }
+            }
         }
     }
-    
+
     private func blockUser() async {
         guard let currentUserID = userDataManager.profile.userID else { return }
         
