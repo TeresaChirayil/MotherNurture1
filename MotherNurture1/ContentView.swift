@@ -18,6 +18,11 @@ struct ContentView: View {
     @State private var loginError: String? = nil
     @State private var isLoggingIn: Bool = false
     @State private var isPasswordVisible: Bool = false
+    @State private var showResetPassword: Bool = false
+    @State private var newPassword: String = ""
+    @State private var confirmPassword: String = ""
+    @State private var isResettingPassword: Bool = false
+    @State private var resetSuccess: Bool = false
 
     var body: some View {
         NavigationStack {
@@ -95,6 +100,19 @@ struct ContentView: View {
                                         }
                                     }
                                     .disabled(isLoggingIn || email.isEmpty)
+                                    
+                                    Button(action: {
+                                        if email.isEmpty {
+                                            loginError = "Please enter your email first."
+                                        } else {
+                                            showResetPassword = true
+                                        }
+                                    }) {
+                                        Text("Forgot Password?")
+                                            .font(.system(size: 14, design: .rounded))
+                                            .foregroundColor(Color(hex: "5C3D2E").opacity(0.7))
+                                            .underline()
+                                    }
                                 }
                                 .padding(.bottom, 40)
                             }
@@ -118,6 +136,133 @@ struct ContentView: View {
             .navigationBarBackButtonHidden(true) // Prevent back navigation from login
             .onAppear { startObservingKeyboard() }
             .onDisappear { stopObservingKeyboard() }
+            .sheet(isPresented: $showResetPassword) {
+                resetPasswordSheet
+            }
+            .alert("Password Reset", isPresented: $resetSuccess) {
+                Button("OK") { }
+            } message: {
+                Text("Your password has been reset. You can now log in with your new password.")
+            }
+        }
+    }
+    
+    private var resetPasswordSheet: some View {
+        NavigationStack {
+            VStack(spacing: 20) {
+                Text("Reset Password")
+                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .foregroundColor(Color(hex: "5C3D2E"))
+                    .padding(.top, 20)
+                
+                Text("Enter a new password for:\n\(email)")
+                    .font(.system(size: 14, design: .rounded))
+                    .foregroundColor(Color(hex: "5C3D2E").opacity(0.7))
+                    .multilineTextAlignment(.center)
+                
+                VStack(spacing: 15) {
+                    SecureField("New Password", text: $newPassword)
+                        .textFieldStyle(CustomTextFieldStyle())
+                    
+                    SecureField("Confirm Password", text: $confirmPassword)
+                        .textFieldStyle(CustomTextFieldStyle())
+                }
+                .padding(.horizontal, 40)
+                
+                if newPassword != confirmPassword && !confirmPassword.isEmpty {
+                    Text("Passwords don't match")
+                        .font(.system(size: 14, design: .rounded))
+                        .foregroundColor(.red)
+                }
+                
+                Button(action: handleResetPassword) {
+                    if isResettingPassword {
+                        ProgressView()
+                            .tint(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 44)
+                    } else {
+                        Text("Reset Password")
+                            .font(.system(size: 18, weight: .medium, design: .rounded))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 44)
+                    }
+                }
+                .background(Color(hex: "8B9A7E"))
+                .cornerRadius(10)
+                .padding(.horizontal, 40)
+                .disabled(newPassword.isEmpty || newPassword != confirmPassword || isResettingPassword)
+                .opacity(newPassword.isEmpty || newPassword != confirmPassword ? 0.5 : 1)
+                
+                Spacer()
+            }
+            .background(Color(hex: "F8F5EE").ignoresSafeArea())
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        newPassword = ""
+                        confirmPassword = ""
+                        showResetPassword = false
+                    }
+                    .foregroundColor(Color(hex: "5C3D2E"))
+                }
+            }
+        }
+    }
+    
+    private func handleResetPassword() {
+        let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !trimmedEmail.isEmpty else { return }
+        guard newPassword == confirmPassword else { return }
+        guard newPassword.count >= 4 else {
+            loginError = "Password must be at least 4 characters."
+            return
+        }
+        
+        isResettingPassword = true
+        
+        Task {
+            do {
+                // First authenticate if needed
+                if !FirebaseService.shared.isAuthenticated() {
+                    _ = try await FirebaseService.shared.signInAnonymously()
+                }
+                
+                // Find the user by email
+                if let profile = try await FirebaseService.shared.getUserProfileByEmail(email: trimmedEmail) {
+                    guard let userID = profile.userID else {
+                        throw NSError(domain: "ContentView", code: -1, userInfo: [NSLocalizedDescriptionKey: "User ID not found"])
+                    }
+                    
+                    // Update the password hash
+                    let newHash = UserProfile.hashPassword(newPassword)
+                    try await FirebaseService.shared.updateUserProfile(userID: userID, data: ["passwordHash": newHash])
+                    
+                    await MainActor.run {
+                        isResettingPassword = false
+                        showResetPassword = false
+                        newPassword = ""
+                        confirmPassword = ""
+                        password = "" // Clear the password field so user enters new one
+                        resetSuccess = true
+                    }
+                    print("✅ Password reset successful for \(trimmedEmail)")
+                } else {
+                    await MainActor.run {
+                        isResettingPassword = false
+                        loginError = "No account found for this email."
+                        showResetPassword = false
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    isResettingPassword = false
+                    loginError = "Failed to reset password: \(error.localizedDescription)"
+                    showResetPassword = false
+                }
+                print("❌ Password reset error: \(error)")
+            }
         }
     }
     

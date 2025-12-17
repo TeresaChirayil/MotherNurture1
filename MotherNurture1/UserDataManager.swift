@@ -218,8 +218,14 @@ class UserDataManager: ObservableObject {
         }
         
         if let loadedProfile = loadedProfile {
+            print("📋 Loaded profile: \(loadedProfile.email ?? "no email")")
+            print("📋 Has password hash: \(loadedProfile.passwordHash != nil)")
+            
             // Verify password if provided
             if let password = password {
+                print("🔐 Attempting password verification...")
+                print("   Input password length: \(password.count)")
+                
                 // Check if user has a password hash stored
                 if loadedProfile.passwordHash != nil {
                     // User has password - verify it
