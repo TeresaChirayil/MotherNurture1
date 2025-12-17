@@ -74,159 +74,196 @@ struct SignUpView: View {
                 .padding(.bottom, 30)
                 
                 ScrollView {
-                    VStack(spacing: 20) {
-                        // First Name Field
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("First Name")
-                                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    VStack(spacing: 16) {
+                        VStack(alignment: .leading, spacing: 14) {
+                            Text("Create your account")
+                                .font(.system(size: 18, weight: .semibold, design: .rounded))
                                 .foregroundColor(Color(hex: "5C3D2E"))
-                            
-                            TextField("", text: $firstName)
-                                .textFieldStyle(SignUpTextFieldStyle())
-                        }
-                        
-                        // Last Name Field
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Last Name")
-                                .font(.system(size: 14, weight: .semibold, design: .rounded))
-                                .foregroundColor(Color(hex: "5C3D2E"))
-                            
-                            TextField("", text: $lastName)
-                                .textFieldStyle(SignUpTextFieldStyle())
-                        }
-                        
-                        // Date of Birth Field
-                        HStack {
-                            Text("Date of Birth")
-                                .font(.system(size: 16, weight: .medium, design: .rounded))
-                                .foregroundColor(Color(hex: "5C3D2E"))
-                            
-                            Spacer()
-                            
-                            Button(action: {
-                                showDatePicker.toggle()
-                            }) {
-                                Text(dateFormatter.string(from: dateOfBirth))
-                                    .font(.system(size: 16, design: .rounded))
-                                    .foregroundColor(Color(hex: "5C3D2E"))
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 10)
-                                    .background(Color(hex: "D4C4B0"))
-                                    .cornerRadius(20)
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                        }
-                        .padding()
-                        .background(Color(hex: "D4C4B0"))
-                        .cornerRadius(8)
-                        
-                        if showDatePicker {
-                            DatePicker(
-                                "Date of Birth",
-                                selection: $dateOfBirth,
-                                displayedComponents: .date
-                            )
-                            .datePickerStyle(.compact)
-                            .accentColor(Color(hex: "5C3D2E"))
-                            .padding()
-                            .background(Color(hex: "D4C4B0"))
-                            .cornerRadius(8)
-                            .padding(.horizontal, 20)
-                            .padding(.top, -10)
-                        }
-                        
-                        // Email Field
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Email")
-                                .font(.system(size: 14, weight: .semibold, design: .rounded))
-                                .foregroundColor(Color(hex: "5C3D2E"))
-                            
-                            TextField("", text: $email)
-                                .textFieldStyle(SignUpTextFieldStyle())
-                                .keyboardType(.emailAddress)
-                                .autocapitalization(.none)
-                                .disableAutocorrection(true)
-                        }
+                                .padding(.bottom, 2)
 
-                        // Password Fields with clear labels and requirement text
-                        VStack(alignment: .leading, spacing: 8) {
-                            // Create Password with Show/Hide
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Create Password")
-                                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            // First Name Field
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("First Name")
+                                    .font(.system(size: 13, weight: .semibold, design: .rounded))
                                     .foregroundColor(Color(hex: "5C3D2E"))
-                                
-                                PasswordField(
-                                    title: "At least 6 characters",
-                                    text: $password,
-                                    isVisible: $isPasswordVisible
-                                )
-                            }
-                            
-                            // Confirm Password with Show/Hide
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Confirm Password")
-                                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-                                    .foregroundColor(Color(hex: "5C3D2E"))
-                                
-                                PasswordField(
-                                    title: "Re-enter your password",
-                                    text: $confirmPassword,
-                                    isVisible: $isConfirmPasswordVisible
-                                )
-                            }
-                            
-                            Text("Passwords must be at least 6 characters long.")
-                                .font(.system(size: 13, weight: .regular, design: .rounded))
-                                .foregroundColor(Color(hex: "5C3D2E"))
-                        }
 
-                        // EULA Acceptance
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack(spacing: 12) {
+                                TextField("Enter your first name", text: $firstName)
+                                    .textFieldStyle(SignUpTextFieldStyle())
+                                    .textContentType(.givenName)
+                            }
+
+                            // Last Name Field
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Last Name")
+                                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                    .foregroundColor(Color(hex: "5C3D2E"))
+
+                                TextField("Enter your last name", text: $lastName)
+                                    .textFieldStyle(SignUpTextFieldStyle())
+                                    .textContentType(.familyName)
+                            }
+
+                            // Date of Birth Field
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Date of Birth")
+                                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                    .foregroundColor(Color(hex: "5C3D2E"))
+
                                 Button(action: {
-                                    hasAcceptedEULA.toggle()
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        showDatePicker.toggle()
+                                    }
                                 }) {
-                                    Image(systemName: hasAcceptedEULA ? "checkmark.square.fill" : "square")
-                                        .foregroundColor(hasAcceptedEULA ? Color(hex: "8B9A7E") : Color(hex: "5C3D2E"))
-                                        .font(.system(size: 20))
+                                    HStack(spacing: 10) {
+                                        Image(systemName: "calendar")
+                                            .foregroundColor(Color(hex: "5C3D2E").opacity(0.8))
+
+                                        Text(dateFormatter.string(from: dateOfBirth))
+                                            .font(.system(size: 16, design: .rounded))
+                                            .foregroundColor(Color(hex: "3C2A1E"))
+
+                                        Spacer()
+
+                                        Image(systemName: showDatePicker ? "chevron.up" : "chevron.down")
+                                            .font(.system(size: 13, weight: .semibold))
+                                            .foregroundColor(Color(hex: "5C3D2E").opacity(0.7))
+                                    }
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 12)
+                                    .background(Color(hex: "E8E1D7"))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Color(hex: "5C3D2E").opacity(0.12), lineWidth: 1)
+                                    )
+                                    .cornerRadius(12)
                                 }
-                                .buttonStyle(.plain)
-                                
-                                HStack(spacing: 4) {
-                                    Text("I agree to the")
-                                        .font(.system(size: 14, design: .rounded))
+                                .buttonStyle(PlainButtonStyle())
+
+                                if showDatePicker {
+                                    DatePicker(
+                                        "Date of Birth",
+                                        selection: $dateOfBirth,
+                                        displayedComponents: .date
+                                    )
+                                    .datePickerStyle(.compact)
+                                    .accentColor(Color(hex: "5C3D2E"))
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 10)
+                                    .background(Color(hex: "E8E1D7"))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Color(hex: "5C3D2E").opacity(0.12), lineWidth: 1)
+                                    )
+                                    .cornerRadius(12)
+                                }
+                            }
+
+                            // Email Field
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Email")
+                                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                    .foregroundColor(Color(hex: "5C3D2E"))
+
+                                TextField("Enter your email", text: $email)
+                                    .textFieldStyle(SignUpTextFieldStyle())
+                                    .keyboardType(.emailAddress)
+                                    .textInputAutocapitalization(.never)
+                                    .disableAutocorrection(true)
+                                    .textContentType(.emailAddress)
+                            }
+
+                            // Password Fields with clear labels and requirement text
+                            VStack(alignment: .leading, spacing: 10) {
+                                // Create Password with Show/Hide
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("Create Password")
+                                        .font(.system(size: 13, weight: .semibold, design: .rounded))
                                         .foregroundColor(Color(hex: "5C3D2E"))
+
+                                    PasswordField(
+                                        title: "At least 6 characters",
+                                        text: $password,
+                                        isVisible: $isPasswordVisible
+                                    )
+                                }
+
+                                // Confirm Password with Show/Hide
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("Confirm Password")
+                                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                        .foregroundColor(Color(hex: "5C3D2E"))
+
+                                    PasswordField(
+                                        title: "Re-enter your password",
+                                        text: $confirmPassword,
+                                        isVisible: $isConfirmPasswordVisible
+                                    )
+                                }
+
+                                Text("Passwords must be at least 6 characters long.")
+                                    .font(.system(size: 13, weight: .regular, design: .rounded))
+                                    .foregroundColor(Color(hex: "5C3D2E").opacity(0.85))
+                            }
+
+                            // EULA Acceptance
+                            VStack(alignment: .leading, spacing: 10) {
+                                HStack(spacing: 12) {
                                     Button(action: {
-                                        showEULA = true
+                                        hasAcceptedEULA.toggle()
                                     }) {
-                                        Text("Terms of Service")
-                                            .font(.system(size: 14, weight: .semibold, design: .rounded))
-                                            .foregroundColor(Color(hex: "8B9A7E"))
-                                            .underline()
+                                        Image(systemName: hasAcceptedEULA ? "checkmark.square.fill" : "square")
+                                            .foregroundColor(hasAcceptedEULA ? Color(hex: "8B9A7E") : Color(hex: "5C3D2E"))
+                                            .font(.system(size: 20))
+                                    }
+                                    .buttonStyle(.plain)
+
+                                    HStack(spacing: 4) {
+                                        Text("I agree to the")
+                                            .font(.system(size: 14, design: .rounded))
+                                            .foregroundColor(Color(hex: "5C3D2E"))
+                                        Button(action: {
+                                            showEULA = true
+                                        }) {
+                                            Text("Terms of Service")
+                                                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                                .foregroundColor(Color(hex: "8B9A7E"))
+                                                .underline()
+                                        }
                                     }
                                 }
+
+                                if !hasAcceptedEULA && !validationError.isNilOrEmpty {
+                                    Text("You must accept the Terms of Service to continue")
+                                        .font(.system(size: 12, design: .rounded))
+                                        .foregroundColor(.red)
+                                }
                             }
-                            
-                            if !hasAcceptedEULA && !validationError.isNilOrEmpty {
-                                Text("You must accept the Terms of Service to continue")
-                                    .font(.system(size: 12, design: .rounded))
+                            .padding(.top, 2)
+
+                            // Validation error
+                            if let validationError = validationError {
+                                Text(validationError)
+                                    .font(.system(size: 14, design: .rounded))
                                     .foregroundColor(.red)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 10)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(Color.red.opacity(0.08))
+                                    .cornerRadius(12)
                             }
                         }
-                        .padding(.vertical, 8)
-                        
-                        // Validation error
-                        if let validationError = validationError {
-                            Text(validationError)
-                                .font(.system(size: 14, design: .rounded))
-                                .foregroundColor(.red)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
+                        .padding(18)
+                        .background(Color(hex: "FDFBF6"))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 18)
+                                .stroke(Color(hex: "5C3D2E").opacity(0.10), lineWidth: 1)
+                        )
+                        .cornerRadius(18)
+                        .shadow(color: Color.black.opacity(0.06), radius: 12, x: 0, y: 8)
                     }
                     .padding(.horizontal, 20)
-                    .padding(.top, 10)
-                    .padding(.bottom, 40)
+                    .padding(.top, 4)
+                    .padding(.bottom, 30)
                 }
                 
                 // Sign Up Button
@@ -535,9 +572,14 @@ private struct PasswordField: View {
             }
             .buttonStyle(.plain)
         }
-        .padding()
-        .background(Color(hex: "D4C4B0"))
-        .cornerRadius(8)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(Color(hex: "E8E1D7"))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color(hex: "5C3D2E").opacity(0.12), lineWidth: 1)
+        )
+        .cornerRadius(12)
     }
 }
 
@@ -545,9 +587,14 @@ private struct PasswordField: View {
 struct SignUpTextFieldStyle: TextFieldStyle {
     func _body(configuration: TextField<Self._Label>) -> some View {
         configuration
-            .padding()
-            .background(Color(hex: "D4C4B0")) // Light brown background
-            .cornerRadius(8)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(Color(hex: "E8E1D7")) // Light brown background
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color(hex: "5C3D2E").opacity(0.12), lineWidth: 1)
+            )
+            .cornerRadius(12)
             .foregroundColor(Color(hex: "3C2A1E"))
             .font(.system(size: 16, design: .rounded))
     }
