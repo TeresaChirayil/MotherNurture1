@@ -247,7 +247,7 @@ class ChannelsViewModel: ObservableObject {
         isLoading = true
         
         do {
-            try await db.collection("channels").document(channelId).updateData(channel.toDictionary())
+            try await FirebaseService.shared.updateChannel(channel)
             isLoading = false
             return true
         } catch {

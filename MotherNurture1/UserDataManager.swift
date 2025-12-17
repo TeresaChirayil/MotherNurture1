@@ -386,6 +386,14 @@ class UserDataManager: ObservableObject {
         }
         
         print("🗑️ Starting account deletion for user: \(userID)")
+
+        // Remove user from all channels first
+        do {
+            try await firebaseService.removeUserFromAllChannels(userId: userID)
+            print("✅ Removed user from all channels")
+        } catch {
+            print("⚠️ Failed to remove user from all channels: \(error.localizedDescription)")
+        }
         
         // Delete user profile from Firestore
         try await firebaseService.deleteUserProfile(userID: userID)

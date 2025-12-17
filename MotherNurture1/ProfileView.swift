@@ -64,6 +64,10 @@ struct ProfileView: View {
                                 }
                                 .font(.system(size: 14, weight: .medium, design: .rounded))
                                 .foregroundColor(.red)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(Color(hex: "F8F5EE").opacity(0.9))
+                                .cornerRadius(10)
                             }
                             .alert("Are you sure you want to sign out?", isPresented: $showLogoutAlert) {
                                 Button("Cancel", role: .cancel) { }
@@ -109,8 +113,8 @@ struct ProfileView: View {
                             .disabled(isSaving)
                         }
                         .padding(.horizontal, 20)
-                        .padding(.top, 20)
-                        .padding(.bottom, 20)
+                        .padding(.vertical, 16)
+                        .background(Color(hex: "8B9A7E").opacity(0.8))
                         
                         // Profile Picture
                         ZStack {
@@ -121,6 +125,7 @@ struct ProfileView: View {
                                     Circle()
                                         .stroke(Color.white, lineWidth: 3)
                                 )
+                                .shadow(color: Color.black.opacity(0.08), radius: 10, x: 0, y: 6)
                             
                             // Show selected image, then photoURL, then placeholder
                             if let selectedImage = selectedImage {
@@ -165,6 +170,7 @@ struct ProfileView: View {
                                 .offset(x: 40, y: 40)
                             }
                         }
+                        .padding(.top, 18)
                         .padding(.bottom, 16)
                         
                         // Name and Age
@@ -232,9 +238,9 @@ struct ProfileView: View {
                         
                         // Bio Section
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Bio....")
-                                .font(.system(size: 14, weight: .medium, design: .rounded))
-                                .foregroundColor(Color(hex: "5C3D2E").opacity(0.7))
+                            Text("Bio")
+                                .font(.system(size: 16, weight: .medium, design: .rounded))
+                                .foregroundColor(Color(hex: "5C3D2E"))
                                 .padding(.horizontal, 20)
                             
                             if isEditing {
@@ -249,8 +255,12 @@ struct ProfileView: View {
                                     .padding()
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .frame(minHeight: 100)
-                                    .background(Color(hex: "D4C4B0"))
-                                    .cornerRadius(12)
+                                    .background(Color(hex: "E8E1D7"))
+                                    .cornerRadius(14)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 14)
+                                            .stroke(Color.black.opacity(0.06), lineWidth: 1)
+                                    )
                                     .padding(.horizontal, 20)
                             }
                         }
@@ -346,8 +356,12 @@ struct ProfileView: View {
                                 }
                             }
                             .padding()
-                            .background(Color(hex: "D4C4B0"))
-                            .cornerRadius(12)
+                            .background(Color(hex: "E8E1D7"))
+                            .cornerRadius(14)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(Color.black.opacity(0.06), lineWidth: 1)
+                            )
                             .padding(.horizontal, 20)
                         }
                         .padding(.bottom, 24)
@@ -359,67 +373,76 @@ struct ProfileView: View {
                                 .foregroundColor(Color(hex: "5C3D2E"))
                                 .padding(.horizontal, 20)
                             
-                            if isEditing {
-                                // Editable interests
-                                FlowLayout(spacing: 8) {
-                                    ForEach(interests, id: \.self) { interest in
-                                        Button(action: {
-                                            if editedInterests.contains(interest) {
-                                                editedInterests.remove(interest)
-                                            } else {
-                                                editedInterests.insert(interest)
-                                            }
-                                        }) {
-                                            Text(interest)
-                                                .font(.system(size: 14, weight: .medium, design: .rounded))
-                                                .foregroundColor(editedInterests.contains(interest) ? .white : Color(hex: "5C3D2E"))
-                                                .padding(.horizontal, 12)
-                                                .padding(.vertical, 8)
-                                                .background(editedInterests.contains(interest) ? Color(hex: "8B9A7E") : Color(hex: "D4C4B0"))
-                                                .cornerRadius(20)
-                                        }
-                                        .buttonStyle(PlainButtonStyle())
-                                    }
-                                }
-                                .padding(.horizontal, 20)
-                                
-                                // Add more button (placeholder)
-                                Button(action: {
-                                    // Handle add more
-                                }) {
-                                    HStack {
-                                        Image(systemName: "plus")
-                                            .font(.system(size: 14, weight: .medium))
-                                            .foregroundColor(Color(hex: "5C3D2E"))
-                                        
-                                        Text("Add more")
-                                            .font(.system(size: 14, weight: .medium, design: .rounded))
-                                            .foregroundColor(Color(hex: "5C3D2E"))
-                                    }
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 8)
-                                    .background(Color(hex: "D4C4B0"))
-                                    .cornerRadius(20)
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                                .padding(.horizontal, 20)
-                            } else {
-                                // Display interests
-                                if let userInterests = userDataManager.profile.interests, !userInterests.isEmpty {
+                            VStack(alignment: .leading, spacing: 12) {
+                                if isEditing {
+                                    // Editable interests
                                     FlowLayout(spacing: 8) {
-                                        ForEach(userInterests, id: \.self) { interest in
-                                            Text(interest)
+                                        ForEach(interests, id: \.self) { interest in
+                                            Button(action: {
+                                                if editedInterests.contains(interest) {
+                                                    editedInterests.remove(interest)
+                                                } else {
+                                                    editedInterests.insert(interest)
+                                                }
+                                            }) {
+                                                Text(interest)
+                                                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                                                    .foregroundColor(editedInterests.contains(interest) ? .white : Color(hex: "5C3D2E"))
+                                                    .padding(.horizontal, 12)
+                                                    .padding(.vertical, 8)
+                                                    .background(editedInterests.contains(interest) ? Color(hex: "8B9A7E") : Color(hex: "D4C4B0"))
+                                                    .cornerRadius(20)
+                                            }
+                                            .buttonStyle(PlainButtonStyle())
+                                        }
+                                    }
+                                    .padding(.horizontal, 4)
+                                    
+                                    // Add more button (placeholder)
+                                    Button(action: {
+                                        // Handle add more
+                                    }) {
+                                        HStack {
+                                            Image(systemName: "plus")
+                                                .font(.system(size: 14, weight: .medium))
+                                                .foregroundColor(Color(hex: "5C3D2E"))
+                                            
+                                            Text("Add more")
                                                 .font(.system(size: 14, weight: .medium, design: .rounded))
                                                 .foregroundColor(Color(hex: "5C3D2E"))
-                                                .padding(.horizontal, 12)
-                                                .padding(.vertical, 8)
-                                                .background(Color(hex: "9BA897"))
-                                                .cornerRadius(20)
                                         }
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 8)
+                                        .background(Color(hex: "D4C4B0"))
+                                        .cornerRadius(20)
                                     }
-                                    .padding(.horizontal, 20)
+                                    .buttonStyle(PlainButtonStyle())
+                                } else {
+                                    // Display interests
+                                    if let userInterests = userDataManager.profile.interests, !userInterests.isEmpty {
+                                        FlowLayout(spacing: 8) {
+                                            ForEach(userInterests, id: \.self) { interest in
+                                                Text(interest)
+                                                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                                                    .foregroundColor(Color(hex: "5C3D2E"))
+                                                    .padding(.horizontal, 12)
+                                                    .padding(.vertical, 8)
+                                                    .background(Color(hex: "9BA897"))
+                                                    .cornerRadius(20)
+                                            }
+                                        }
+                                        .padding(.horizontal, 4)
+                                    }
                                 }
                             }
+                            .padding()
+                            .background(Color(hex: "E8E1D7"))
+                            .cornerRadius(14)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(Color.black.opacity(0.06), lineWidth: 1)
+                            )
+                            .padding(.horizontal, 20)
                         }
                         .padding(.bottom, 100)
                     }
@@ -651,8 +674,12 @@ struct ProfileView: View {
             configuration
                 .padding()
                 .frame(minHeight: 100)
-                .background(Color(hex: "D4C4B0"))
-                .cornerRadius(12)
+                .background(Color(hex: "E8E1D7"))
+                .cornerRadius(14)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(Color.black.opacity(0.06), lineWidth: 1)
+                )
                 .foregroundColor(Color(hex: "5C3D2E"))
                 .font(.system(size: 16, design: .rounded))
         }

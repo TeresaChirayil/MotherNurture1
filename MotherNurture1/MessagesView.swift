@@ -27,10 +27,18 @@ struct MessagesView: View {
     @State private var userProfilesCache: [String: UserProfile] = [:]
     @State private var showEditChannel = false
     @State private var editableChannel: Channel
+    @State private var isEditingTitle = false
+    @State private var editedTitle: String = ""
+    @State private var isSavingTitle = false
+    @State private var showTitleSaveError = false
+    @State private var titleSaveErrorMessage = ""
+    @State private var otherUserDeleted = false
+    @State private var showOtherUserDeletedAlert = false
     
     init(channel: Channel) {
         self.channel = channel
         self._editableChannel = State(initialValue: channel)
+        self._editedTitle = State(initialValue: channel.name)
     }
     
     private var canBlockOrReport: Bool {
@@ -39,6 +47,11 @@ struct MessagesView: View {
     
     private var currentUserID: String? {
         userDataManager.profile.userID
+    }
+
+    private var canEditTitle: Bool {
+        guard let userId = currentUserID, !editableChannel.isDirectMessage else { return false }
+        return editableChannel.isAdmin(userId: userId)
     }
     
     private var currentUserName: String {
@@ -68,14 +81,14 @@ struct MessagesView: View {
                         }) {
                             HStack(spacing: 8) {
                                 // Show profile pic of other user
-                                if let otherUserId = channel.memberIds.first(where: { $0 != currentUserID }),
+                                if let otherUserId = editableChannel.memberIds.first(where: { $0 != currentUserID }),
                                    let cachedProfile = userProfilesCache[otherUserId] {
                                     ProfilePicView(profile: cachedProfile, name: channel.displayName(forUserId: currentUserID), size: 32)
                                 } else {
                                     ProfilePicView(profile: nil, name: channel.displayName(forUserId: currentUserID), size: 32)
                                 }
                                 
-                                Text(channel.displayName(forUserId: currentUserID))
+                                Text(editableChannel.displayName(forUserId: currentUserID))
                                     .font(.system(size: 18, weight: .bold, design: .rounded))
                                     .foregroundColor(Color(hex: "5C3D2E"))
                                 
@@ -86,15 +99,62 @@ struct MessagesView: View {
                         }
                         .buttonStyle(PlainButtonStyle())
                     } else {
-                        Text(channel.displayName(forUserId: currentUserID))
-                            .font(.system(size: 18, weight: .bold, design: .rounded))
-                            .foregroundColor(Color(hex: "5C3D2E"))
+                        if canEditTitle && isEditingTitle {
+                            TextField("Channel name", text: $editedTitle)
+                                .font(.system(size: 18, weight: .bold, design: .rounded))
+                                .foregroundColor(Color(hex: "5C3D2E"))
+                                .textFieldStyle(.plain)
+                                .submitLabel(.done)
+                                .disabled(isSavingTitle)
+                                .onSubmit {
+                                    saveEditedTitle()
+                                }
+                        } else if canEditTitle {
+                            Button(action: {
+                                editedTitle = editableChannel.name
+                                isEditingTitle = true
+                            }) {
+                                Text(editableChannel.displayName(forUserId: currentUserID))
+                                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                                    .foregroundColor(Color(hex: "5C3D2E"))
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        } else {
+                            Text(editableChannel.displayName(forUserId: currentUserID))
+                                .font(.system(size: 18, weight: .bold, design: .rounded))
+                                .foregroundColor(Color(hex: "5C3D2E"))
+                        }
                     }
                     
                     Spacer()
                     
                     // Edit button for group channels (not DMs)
                     if !channel.isDirectMessage {
+                        if canEditTitle && isEditingTitle {
+                            Button(action: {
+                                saveEditedTitle()
+                            }) {
+                                if isSavingTitle {
+                                    ProgressView()
+                                        .tint(Color(hex: "5C3D2E"))
+                                } else {
+                                    Image(systemName: "checkmark")
+                                        .foregroundColor(Color(hex: "5C3D2E"))
+                                        .font(.system(size: 18, weight: .medium))
+                                }
+                            }
+                            .disabled(isSavingTitle)
+
+                            Button(role: .cancel, action: {
+                                isEditingTitle = false
+                                editedTitle = editableChannel.name
+                            }) {
+                                Image(systemName: "xmark")
+                                    .foregroundColor(Color(hex: "5C3D2E"))
+                                    .font(.system(size: 16, weight: .medium))
+                            }
+                        }
+
                         Button(action: {
                             showEditChannel = true
                         }) {
@@ -133,6 +193,16 @@ struct MessagesView: View {
                 .padding(.horizontal, 20)
                 .padding(.vertical, 16)
                 .background(Color(hex: "8B9A7E").opacity(0.8))
+
+                if channel.isDirectMessage && otherUserDeleted {
+                    Text("This user has deleted their account. You can no longer send messages in this chat.")
+                        .font(.system(size: 13, design: .rounded))
+                        .foregroundColor(Color(hex: "5C3D2E"))
+                        .padding(.vertical, 10)
+                        .padding(.horizontal, 16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color(hex: "E8E1D7"))
+                }
                 
                 // Messages list
                 ScrollViewReader { scrollProxy in
@@ -157,7 +227,7 @@ struct MessagesView: View {
                                     let isGroupChannel = !channel.isDirectMessage
                                     
                                     // Check if message is read by others (for sent messages)
-                                    let otherMemberIds = channel.memberIds.filter { $0 != currentUserID }
+                                    let otherMemberIds = editableChannel.memberIds.filter { $0 != currentUserID }
                                     let isReadByOthers = !otherMemberIds.isEmpty && otherMemberIds.allSatisfy { msg.readBy.contains($0) }
                                     
                                     HStack(alignment: .top, spacing: 8) {
@@ -245,18 +315,21 @@ struct MessagesView: View {
         
                 
                 // Message input field
-                HStack(spacing: 12) {
-                    TextField("Type a message...", text: $newMessage)
+                HStack(alignment: .bottom, spacing: 12) {
+                    TextField("Type a message...", text: $newMessage, axis: .vertical)
+                        .lineLimit(1...6)
                         .padding(10)
                         .background(Color.white)
                         .cornerRadius(10)
                         .foregroundColor(Color(hex: "000000"))
+                        .disabled(channel.isDirectMessage && otherUserDeleted)
                     
                     Button(action: sendMessage) {
                         Image(systemName: "paperplane.fill")
                             .foregroundColor(Color(hex: "5C3D2E"))
                             .font(.system(size: 20))
                     }
+                    .disabled(channel.isDirectMessage && otherUserDeleted)
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 10)
@@ -264,6 +337,16 @@ struct MessagesView: View {
             }
         }
         .navigationBarBackButtonHidden(true)
+        .alert("User Unavailable", isPresented: $showOtherUserDeletedAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("This user has deleted their account.")
+        }
+        .alert("Couldn't Update Name", isPresented: $showTitleSaveError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(titleSaveErrorMessage)
+        }
         .confirmationDialog("Block User", isPresented: $showBlockConfirmation, titleVisibility: .visible) {
             Button("Block", role: .destructive) {
                 Task { await blockUser() }
@@ -315,7 +398,7 @@ struct MessagesView: View {
                         do {
                             try await FirebaseService.shared.updateChannel(updatedChannel)
                         } catch {
-                            print("Error updating channel: \(error)")
+                            print("Error updating channel: \(error.localizedDescription)")
                         }
                     }
                 }
@@ -328,14 +411,8 @@ struct MessagesView: View {
             markMessagesAsRead()
             // Pre-load other user's profile for DM header
             if channel.isDirectMessage {
-                if let otherUserId = channel.memberIds.first(where: { $0 != currentUserID }) {
-                    Task {
-                        if let profile = try? await FirebaseService.shared.getUserProfile(userID: otherUserId) {
-                            await MainActor.run {
-                                userProfilesCache[otherUserId] = profile
-                            }
-                        }
-                    }
+                Task {
+                    await refreshDMState()
                 }
             }
         }
@@ -376,7 +453,39 @@ struct MessagesView: View {
             }
         }
     }
+
+    private func saveEditedTitle() {
+        guard canEditTitle else { return }
+        let trimmed = editedTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        isSavingTitle = true
+        Task {
+            do {
+                var updated = editableChannel
+                updated.name = trimmed
+                try await FirebaseService.shared.updateChannel(updated)
+                await MainActor.run {
+                    editableChannel = updated
+                    isEditingTitle = false
+                    isSavingTitle = false
+                }
+            } catch {
+                await MainActor.run {
+                    titleSaveErrorMessage = error.localizedDescription
+                    showTitleSaveError = true
+                    isSavingTitle = false
+                }
+            }
+        }
+    }
+
     private func sendMessage() {
+        if channel.isDirectMessage && otherUserDeleted {
+            sendErrorMessage = "This user has deleted their account. You can no longer send messages in this chat."
+            showSendError = true
+            return
+        }
         let trimmedMessage = newMessage.trimmingCharacters(in: .whitespaces)
         guard !trimmedMessage.isEmpty else { return }
 
@@ -557,6 +666,12 @@ struct MessagesView: View {
                         userProfilesCache[userId] = profile
                         selectedUserProfile = profile
                         showUserProfile = true
+                        otherUserDeleted = false
+                    } else {
+                        if channel.isDirectMessage {
+                            otherUserDeleted = true
+                        }
+                        showOtherUserDeletedAlert = true
                     }
                 }
             } catch {
@@ -589,8 +704,51 @@ struct MessagesView: View {
     
     private func loadOtherUserProfile() {
         // For DM channels, find the other user and show their profile
-        guard let otherUserId = channel.memberIds.first(where: { $0 != currentUserID }) else { return }
+        if otherUserDeleted {
+            showOtherUserDeletedAlert = true
+            return
+        }
+        guard let otherUserId = editableChannel.memberIds.first(where: { $0 != currentUserID }) else {
+            otherUserDeleted = true
+            showOtherUserDeletedAlert = true
+            return
+        }
         loadAndShowProfile(userId: otherUserId)
+    }
+
+    private func refreshDMState() async {
+        do {
+            let doc = try await Firestore.firestore().collection("channels").document(channel.id).getDocument()
+            if let data = doc.data(), let memberIds = data["memberIds"] as? [String] {
+                await MainActor.run {
+                    editableChannel.memberIds = memberIds
+                }
+            }
+        } catch {
+            print("⚠️ Error refreshing DM channel state: \(error.localizedDescription)")
+        }
+
+        guard let currentUserID else { return }
+        guard let otherUserId = editableChannel.memberIds.first(where: { $0 != currentUserID }) else {
+            await MainActor.run {
+                otherUserDeleted = true
+            }
+            return
+        }
+
+        do {
+            let profile = try await FirebaseService.shared.getUserProfile(userID: otherUserId)
+            await MainActor.run {
+                if let profile {
+                    userProfilesCache[otherUserId] = profile
+                    otherUserDeleted = false
+                } else {
+                    otherUserDeleted = true
+                }
+            }
+        } catch {
+            print("⚠️ Error refreshing DM other user profile: \(error.localizedDescription)")
+        }
     }
 }
 

@@ -15,6 +15,8 @@ struct ContentView: View {
     @State private var navigateToChannels = false
     @State private var navigateToSignUp = false
     @State private var keyboardHeight: CGFloat = 0
+    @State private var keyboardWillChangeFrameObserver: NSObjectProtocol?
+    @State private var keyboardWillHideObserver: NSObjectProtocol?
     @State private var loginError: String? = nil
     @State private var isLoggingIn: Bool = false
     @State private var isPasswordVisible: Bool = false
@@ -347,7 +349,17 @@ struct ContentView: View {
     
     // MARK: - Keyboard Observing
     private func startObservingKeyboard() {
-        NotificationCenter.default.addObserver(
+        // Prevent observer accumulation if this view appears multiple times
+        if let existing = keyboardWillChangeFrameObserver {
+            NotificationCenter.default.removeObserver(existing)
+            keyboardWillChangeFrameObserver = nil
+        }
+        if let existing = keyboardWillHideObserver {
+            NotificationCenter.default.removeObserver(existing)
+            keyboardWillHideObserver = nil
+        }
+
+        keyboardWillChangeFrameObserver = NotificationCenter.default.addObserver(
             forName: UIResponder.keyboardWillChangeFrameNotification,
             object: nil,
             queue: .main
@@ -359,12 +371,10 @@ struct ContentView: View {
                 let curveRaw = (userInfo[UIResponder.keyboardAnimationCurveUserInfoKey] as? UInt)
             else { return }
             
-            // Convert keyboard frame to the current key window coordinate space and measure overlap
-            let keyboardEndY = endFrame.origin.y
-            // keyWindowScene-safe: use the screen height from the frame itself (no UIScreen.main)
-            let screenHeightFromFrame = endFrame.maxY > 0 ? max(endFrame.maxY, keyboardEndY) : UIScreen.main.bounds.height
-            // Note: endFrame is in screen coordinates; overlap is distance from bottom
-            let newHeight = max(0, screenHeightFromFrame - keyboardEndY)
+            // endFrame is in screen coordinates; overlap is distance from bottom of the screen.
+            // When the keyboard is hidden, endFrame.origin.y == screenHeight, so overlap becomes 0.
+            let screenHeight = UIScreen.main.bounds.height
+            let newHeight = max(0, screenHeight - endFrame.origin.y)
             
             let options = UIView.AnimationOptions(rawValue: curveRaw << 16)
             UIView.animate(withDuration: duration, delay: 0, options: options) {
@@ -372,7 +382,7 @@ struct ContentView: View {
             }
         }
         
-        NotificationCenter.default.addObserver(
+        keyboardWillHideObserver = NotificationCenter.default.addObserver(
             forName: UIResponder.keyboardWillHideNotification,
             object: nil,
             queue: .main
@@ -382,8 +392,15 @@ struct ContentView: View {
     }
     
     private func stopObservingKeyboard() {
-        NotificationCenter.default.removeObserver(self, name: UIResponder.keyboardWillChangeFrameNotification, object: nil)
-        NotificationCenter.default.removeObserver(self, name: UIResponder.keyboardWillHideNotification, object: nil)
+        if let token = keyboardWillChangeFrameObserver {
+            NotificationCenter.default.removeObserver(token)
+            keyboardWillChangeFrameObserver = nil
+        }
+        if let token = keyboardWillHideObserver {
+            NotificationCenter.default.removeObserver(token)
+            keyboardWillHideObserver = nil
+        }
+        keyboardHeight = 0
     }
 }
 

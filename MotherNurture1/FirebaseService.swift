@@ -352,6 +352,68 @@ class FirebaseService {
         ])
         print("✅ Added \(memberIds.count) members to channel \(channelId)")
     }
+
+    func removeMemberFromChannel(channelId: String, memberId: String) async throws {
+        guard !channelId.isEmpty, !memberId.isEmpty else { return }
+
+        let channelRef = db.collection("channels").document(channelId)
+        let userRef = db.collection("users").document(memberId)
+
+        try await db.runTransaction { transaction, errorPointer in
+            let snapshot: DocumentSnapshot
+            do {
+                snapshot = try transaction.getDocument(channelRef)
+            } catch let error as NSError {
+                errorPointer?.pointee = error
+                return nil
+            }
+
+            guard let data = snapshot.data() else {
+                return nil
+            }
+
+            var memberIds = data["memberIds"] as? [String] ?? []
+            var adminIds = data["adminIds"] as? [String] ?? []
+
+            memberIds.removeAll { $0 == memberId }
+            adminIds.removeAll { $0 == memberId }
+
+            if memberIds.isEmpty {
+                transaction.deleteDocument(channelRef)
+                transaction.updateData([
+                    "channelMemberships": FieldValue.arrayRemove([channelId])
+                ], forDocument: userRef)
+                return nil
+            }
+
+            if adminIds.isEmpty, let newAdmin = memberIds.first {
+                adminIds = [newAdmin]
+            }
+
+            transaction.updateData([
+                "memberIds": memberIds,
+                "adminIds": adminIds
+            ], forDocument: channelRef)
+
+            transaction.updateData([
+                "channelMemberships": FieldValue.arrayRemove([channelId])
+            ], forDocument: userRef)
+
+            return nil
+        }
+    }
+
+    func removeUserFromAllChannels(userId: String) async throws {
+        guard !userId.isEmpty else { return }
+
+        let snapshot = try await db.collection("channels")
+            .whereField("memberIds", arrayContains: userId)
+            .getDocuments()
+
+        for doc in snapshot.documents {
+            try await removeMemberFromChannel(channelId: doc.documentID, memberId: userId)
+        }
+    }
     
     // -----------------------------------------------------
     // MARK: - Update Channel

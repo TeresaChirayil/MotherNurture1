@@ -105,45 +105,46 @@ struct ChannelsView: View {
                             }
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                         } else {
-                            List {
-                                ForEach(filteredChannels) { channel in
-                                    ChannelRow(
-                                        channel: channel,
-                                        currentUserId: userDataManager.profile.userID ?? "",
-                                        unreadCount: viewModel.unreadCounts[channel.id] ?? 0,
-                                        onLeave: { leaveChannel(channel) },
-                                        onEdit: { editChannel(channel) },
-                                        onShowMembers: { showChannelMembers(channel) }
-                                    )
-                                    .listRowBackground(Color.clear)
-                                    .listRowInsets(EdgeInsets())
-                                    .padding(.horizontal)
-                                    .padding(.vertical, 4)
-                                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                        Button(role: .destructive) {
-                                            leaveChannel(channel)
-                                        } label: {
-                                            Label("Leave", systemImage: "person.fill.xmark")
-                                        }
-                                        .tint(Color(hex: "D4A5A5"))
-                                        
-                                        if channel.isAdmin(userId: userDataManager.profile.userID ?? "") {
-                                            Button {
-                                                editChannel(channel)
+                            ScrollView {
+                                LazyVStack(spacing: 0) {
+                                    ForEach(filteredChannels) { channel in
+                                        ChannelRow(
+                                            channel: channel,
+                                            currentUserId: userDataManager.profile.userID ?? "",
+                                            unreadCount: viewModel.unreadCounts[channel.id] ?? 0,
+                                            onLeave: { leaveChannel(channel) },
+                                            onEdit: { editChannel(channel) },
+                                            onShowMembers: { showChannelMembers(channel) }
+                                        )
+                                        .padding(.horizontal)
+                                        .padding(.vertical, 4)
+                                        .contextMenu {
+                                            Button(role: .destructive) {
+                                                leaveChannel(channel)
                                             } label: {
-                                                Label("Edit", systemImage: "pencil")
+                                                Label("Leave", systemImage: "person.fill.xmark")
                                             }
-                                            .tint(Color(hex: "8B9A7E"))
+
+                                            if channel.isAdmin(userId: userDataManager.profile.userID ?? "") {
+                                                Button {
+                                                    editChannel(channel)
+                                                } label: {
+                                                    Label("Edit", systemImage: "pencil")
+                                                }
+                                            }
                                         }
                                     }
                                 }
+                                .padding(.top, 4)
+                                .padding(.bottom, geo.safeAreaInsets.bottom + 120)
                             }
-                            .listStyle(PlainListStyle())
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .refreshable {
                                 await viewModel.fetchChannels()
                             }
                         }
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     
                     // Add Channel Button
                     Button(action: { showCreateChannel = true }) {
@@ -327,10 +328,20 @@ struct ChannelRow: View {
                 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(alignment: .top) {
-                        Text(channel.displayName(forUserId: currentUserId))
-                            .font(.headline)
-                            .foregroundColor(Color(hex: "5C3D2E"))
-                            .lineLimit(1)
+                        if isAdmin && !channel.isDirectMessage {
+                            Button(action: onEdit) {
+                                Text(channel.displayName(forUserId: currentUserId))
+                                    .font(.headline)
+                                    .foregroundColor(Color(hex: "5C3D2E"))
+                                    .lineLimit(1)
+                            }
+                            .buttonStyle(BorderlessButtonStyle())
+                        } else {
+                            Text(channel.displayName(forUserId: currentUserId))
+                                .font(.headline)
+                                .foregroundColor(Color(hex: "5C3D2E"))
+                                .lineLimit(1)
+                        }
                         
                         if isAdmin && !channel.isDirectMessage {
                             Text("Admin")
@@ -421,6 +432,10 @@ struct EditChannelView: View {
     @State private var isSaving = false
     @State private var currentMembers: [UserProfile] = []
     @State private var isLoadingMembers = false
+    @State private var memberToRemove: UserProfile?
+    @State private var showRemoveMemberConfirm = false
+    @State private var showRemoveMemberError = false
+    @State private var removeMemberErrorMessage = ""
 
     init(channel: Channel, isPresented: Binding<Bool>, onSave: @escaping (Channel) -> Void) {
         self.channel = channel
@@ -569,14 +584,25 @@ struct EditChannelView: View {
                                                             .foregroundColor(Color(hex: "5C3D2E"))
                                                     )
                                             }
-                                            
+
                                             Text("\(member.firstName ?? "") \(member.lastName ?? "")")
                                                 .font(.system(size: 16, design: .rounded))
                                                 .foregroundColor(Color(hex: "5C3D2E"))
-                                            
+
                                             Spacer()
-                                            
-                                            if member.userID == userDataManager.profile.userID {
+
+                                            if channel.isAdmin(userId: userDataManager.profile.userID ?? ""),
+                                               member.userID != userDataManager.profile.userID {
+                                                Button(role: .destructive) {
+                                                    memberToRemove = member
+                                                    showRemoveMemberConfirm = true
+                                                } label: {
+                                                    Image(systemName: "xmark.circle.fill")
+                                                        .foregroundColor(Color.red.opacity(0.8))
+                                                        .font(.system(size: 18))
+                                                }
+                                                .buttonStyle(BorderlessButtonStyle())
+                                            } else if member.userID == userDataManager.profile.userID {
                                                 Text("You")
                                                     .font(.system(size: 12, design: .rounded))
                                                     .foregroundColor(Color(hex: "8B9A7E"))
@@ -667,6 +693,49 @@ struct EditChannelView: View {
             .onAppear {
                 loadCurrentMembers()
             }
+            .alert("Remove Member", isPresented: $showRemoveMemberConfirm) {
+                Button("Cancel", role: .cancel) { memberToRemove = nil }
+                Button("Remove", role: .destructive) {
+                    removeSelectedMember()
+                }
+            } message: {
+                Text("Are you sure you want to remove this member from the channel?")
+            }
+            .alert("Cannot Remove", isPresented: $showRemoveMemberError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(removeMemberErrorMessage)
+            }
+        }
+    }
+
+    private func removeSelectedMember() {
+        guard let memberId = memberToRemove?.userID else { return }
+        guard channel.memberIds.count > 1 else {
+            removeMemberErrorMessage = "This channel must have at least one member."
+            showRemoveMemberError = true
+            memberToRemove = nil
+            return
+        }
+
+        isSaving = true
+        Task {
+            do {
+                try await FirebaseService.shared.removeMemberFromChannel(channelId: channel.id, memberId: memberId)
+                await MainActor.run {
+                    memberToRemove = nil
+                    showRemoveMemberConfirm = false
+                    isSaving = false
+                }
+                loadCurrentMembers()
+            } catch {
+                print("Error removing member: \(error)")
+                await MainActor.run {
+                    removeMemberErrorMessage = error.localizedDescription
+                    showRemoveMemberError = true
+                    isSaving = false
+                }
+            }
         }
     }
     
@@ -674,8 +743,15 @@ struct EditChannelView: View {
         isLoadingMembers = true
         
         Task {
+            var memberIds: [String] = channel.memberIds
+            if let doc = try? await Firestore.firestore().collection("channels").document(channel.id).getDocument(),
+               let data = doc.data(),
+               let ids = data["memberIds"] as? [String] {
+                memberIds = ids
+            }
+
             var members: [UserProfile] = []
-            for memberId in channel.memberIds {
+            for memberId in memberIds {
                 if let profile = try? await FirebaseService.shared.getUserProfile(userID: memberId) {
                     members.append(profile)
                 }
