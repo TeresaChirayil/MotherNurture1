@@ -22,6 +22,9 @@ struct MessagesView: View {
     @State private var messages: [Message] = []
     @State private var messageListener: ListenerRegistration?
     @State private var isLoading = true
+    @State private var selectedUserProfile: UserProfile? = nil
+    @State private var showUserProfile = false
+    @State private var userProfilesCache: [String: UserProfile] = [:]
     
     private var canBlockOrReport: Bool {
         channel.isDirectMessage // Only allow block/report for direct messages
@@ -111,67 +114,71 @@ struct MessagesView: View {
                                     let otherMemberIds = channel.memberIds.filter { $0 != currentUserID }
                                     let isReadByOthers = !otherMemberIds.isEmpty && otherMemberIds.allSatisfy { msg.readBy.contains($0) }
                                     
-                                    VStack(alignment: isCurrentUser ? .trailing : .leading, spacing: 2) {
-                                        // Show sender name in group channels for messages from others
-                                        if isGroupChannel && !isCurrentUser && !msg.authorName.isEmpty {
-                                            Text(msg.authorName)
-                                                .font(.system(size: 12, weight: .medium, design: .rounded))
-                                                .foregroundColor(Color(hex: "5C3D2E").opacity(0.7))
-                                                .padding(.horizontal, 4)
-                                        }
-                                        
-                                        HStack(alignment: .bottom) {
-                                            if isCurrentUser {
-                                                Spacer(minLength: 40)
-                                                Text(msg.text)
-                                                    .padding(.vertical, 10)
-                                                    .padding(.horizontal, 14)
-                                                    .background(Color(hex: "D7C4B7")) // Sent: light brown
-                                                    .foregroundColor(Color(hex: "000000"))
-                                                    .cornerRadius(14)
-                                                    .frame(maxWidth: 260, alignment: .trailing)
-                                                    .overlay(
-                                                        RoundedRectangle(cornerRadius: 14)
-                                                            .stroke(Color.black.opacity(0.05), lineWidth: 0.5)
-                                                    )
-                                            } else {
-                                                Text(msg.text)
-                                                    .padding(.vertical, 10)
-                                                    .padding(.horizontal, 14)
-                                                    .background(Color(hex: "DDE3D0")) // Received: light green
-                                                    .foregroundColor(Color(hex: "000000"))
-                                                    .cornerRadius(14)
-                                                    .frame(maxWidth: 260, alignment: .leading)
-                                                    .overlay(
-                                                        RoundedRectangle(cornerRadius: 14)
-                                                            .stroke(Color.black.opacity(0.05), lineWidth: 0.5)
-                                                    )
-                                                Spacer(minLength: 40)
+                                    HStack(alignment: .top, spacing: 8) {
+                                        // Profile pic for messages from others
+                                        if !isCurrentUser {
+                                            Button(action: {
+                                                loadAndShowProfile(userId: msg.authorID)
+                                            }) {
+                                                ProfilePicView(
+                                                    profile: userProfilesCache[msg.authorID],
+                                                    name: msg.authorName,
+                                                    size: 32
+                                                )
                                             }
+                                            .buttonStyle(PlainButtonStyle())
                                         }
                                         
-                                        // Time stamp and delivery status
-                                        HStack(spacing: 4) {
-                                            Text(msg.formattedTime)
-                                                .font(.system(size: 10, design: .rounded))
-                                                .foregroundColor(Color(hex: "5C3D2E").opacity(0.5))
+                                        VStack(alignment: isCurrentUser ? .trailing : .leading, spacing: 2) {
+                                            // Show sender name in group channels for messages from others
+                                            if isGroupChannel && !isCurrentUser && !msg.authorName.isEmpty {
+                                                Text(msg.authorName)
+                                                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                                                    .foregroundColor(Color(hex: "5C3D2E").opacity(0.7))
+                                                    .padding(.horizontal, 4)
+                                            }
                                             
-                                            // Show delivery/read status for sent messages
-                                            if isCurrentUser {
-                                                if isReadByOthers {
-                                                    Text("Read")
-                                                        .font(.system(size: 10, design: .rounded))
-                                                        .foregroundColor(Color(hex: "8B9A7E"))
-                                                } else if msg.isDelivered {
-                                                    Text("Delivered")
-                                                        .font(.system(size: 10, design: .rounded))
-                                                        .foregroundColor(Color(hex: "5C3D2E").opacity(0.5))
+                                            Text(msg.text)
+                                                .padding(.vertical, 10)
+                                                .padding(.horizontal, 14)
+                                                .background(isCurrentUser ? Color(hex: "D7C4B7") : Color(hex: "DDE3D0"))
+                                                .foregroundColor(Color(hex: "000000"))
+                                                .cornerRadius(14)
+                                                .frame(maxWidth: 240, alignment: isCurrentUser ? .trailing : .leading)
+                                                .overlay(
+                                                    RoundedRectangle(cornerRadius: 14)
+                                                        .stroke(Color.black.opacity(0.05), lineWidth: 0.5)
+                                                )
+                                            
+                                            // Time stamp and delivery status
+                                            HStack(spacing: 4) {
+                                                Text(msg.formattedTime)
+                                                    .font(.system(size: 10, design: .rounded))
+                                                    .foregroundColor(Color(hex: "5C3D2E").opacity(0.5))
+                                                
+                                                // Show delivery/read status for sent messages
+                                                if isCurrentUser {
+                                                    if isReadByOthers {
+                                                        Text("Read")
+                                                            .font(.system(size: 10, design: .rounded))
+                                                            .foregroundColor(Color(hex: "8B9A7E"))
+                                                    } else if msg.isDelivered {
+                                                        Text("Delivered")
+                                                            .font(.system(size: 10, design: .rounded))
+                                                            .foregroundColor(Color(hex: "5C3D2E").opacity(0.5))
+                                                    }
                                                 }
                                             }
+                                            .padding(.horizontal, 4)
                                         }
-                                        .padding(.horizontal, 4)
+                                        
+                                        // Spacer for alignment
+                                        if !isCurrentUser {
+                                            Spacer(minLength: 20)
+                                        }
                                     }
-                                    .padding(.horizontal, 20)
+                                    .frame(maxWidth: .infinity, alignment: isCurrentUser ? .trailing : .leading)
+                                    .padding(.horizontal, 16)
                                     .padding(.vertical, 2)
                                     .id(msg.id)
                                 }
@@ -244,6 +251,12 @@ struct MessagesView: View {
             Button("OK", role: .cancel) { }
         } message: {
             Text(sendErrorMessage)
+        }
+        .sheet(isPresented: $showUserProfile) {
+            if let profile = selectedUserProfile {
+                UserProfileSheetView(profile: profile)
+                    .environmentObject(userDataManager)
+            }
         }
         .onAppear {
             loadMessages()
@@ -444,6 +457,325 @@ struct MessagesView: View {
                 print("⚠️ Error marking messages as read: \(error.localizedDescription)")
             }
         }
+    }
+    
+    private func loadAndShowProfile(userId: String) {
+        // Check cache first
+        if let cachedProfile = userProfilesCache[userId] {
+            selectedUserProfile = cachedProfile
+            showUserProfile = true
+            return
+        }
+        
+        // Load from Firebase
+        Task {
+            do {
+                let profile = try await FirebaseService.shared.getUserProfile(userID: userId)
+                await MainActor.run {
+                    if let profile = profile {
+                        userProfilesCache[userId] = profile
+                        selectedUserProfile = profile
+                        showUserProfile = true
+                    }
+                }
+            } catch {
+                print("⚠️ Error loading user profile: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    private func loadUserProfiles() {
+        // Pre-load profiles for all message authors
+        let authorIds = Set(messages.map { $0.authorID }).filter { $0 != currentUserID }
+        
+        for authorId in authorIds {
+            if userProfilesCache[authorId] == nil {
+                Task {
+                    do {
+                        let profile = try await FirebaseService.shared.getUserProfile(userID: authorId)
+                        await MainActor.run {
+                            if let profile = profile {
+                                userProfilesCache[authorId] = profile
+                            }
+                        }
+                    } catch {
+                        print("⚠️ Error pre-loading profile for \(authorId): \(error.localizedDescription)")
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Profile Pic View
+struct ProfilePicView: View {
+    let profile: UserProfile?
+    let name: String
+    let size: CGFloat
+    
+    var initials: String {
+        let parts = name.split(separator: " ")
+        if parts.count >= 2 {
+            return "\(parts[0].prefix(1))\(parts[1].prefix(1))".uppercased()
+        } else if let first = parts.first {
+            return String(first.prefix(1)).uppercased()
+        }
+        return "?"
+    }
+    
+    var body: some View {
+        if let photoURL = profile?.photoURL, let url = URL(string: photoURL) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .empty:
+                    placeholderView
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: size, height: size)
+                        .clipShape(Circle())
+                case .failure:
+                    placeholderView
+                @unknown default:
+                    placeholderView
+                }
+            }
+        } else {
+            placeholderView
+        }
+    }
+    
+    var placeholderView: some View {
+        ZStack {
+            Circle()
+                .fill(Color(hex: "8B9A7E"))
+                .frame(width: size, height: size)
+            Text(initials)
+                .font(.system(size: size * 0.4, weight: .medium))
+                .foregroundColor(.white)
+        }
+    }
+}
+
+// MARK: - User Profile Sheet View
+struct UserProfileSheetView: View {
+    let profile: UserProfile
+    @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var userDataManager: UserDataManager
+    
+    @State private var showBlockConfirmation = false
+    @State private var showMessageSent = false
+    @State private var navigateToChat = false
+    @State private var dmChannel: Channel? = nil
+    
+    var fullName: String {
+        let first = profile.firstName ?? ""
+        let last = profile.lastName ?? ""
+        return "\(first) \(last)".trimmingCharacters(in: .whitespaces)
+    }
+    
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 16) {
+                // Profile Picture
+                ProfilePicView(profile: profile, name: fullName, size: 80)
+                    .padding(.top, 16)
+                
+                // Name
+                Text(fullName.isEmpty ? "User" : fullName)
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .foregroundColor(Color(hex: "5C3D2E"))
+                
+                // Location
+                if let town = profile.town, !town.isEmpty {
+                    HStack(spacing: 4) {
+                        Image(systemName: "location.fill")
+                            .foregroundColor(Color(hex: "8B9A7E"))
+                            .font(.system(size: 12))
+                        Text(town)
+                            .foregroundColor(Color(hex: "5C3D2E"))
+                    }
+                    .font(.system(size: 14, design: .rounded))
+                }
+                
+                // Action Buttons
+                HStack(spacing: 16) {
+                    Button(action: startDirectMessage) {
+                        HStack {
+                            Image(systemName: "message.fill")
+                            Text("Message")
+                        }
+                        .font(.system(size: 16, weight: .medium, design: .rounded))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Color(hex: "8B9A7E"))
+                        .cornerRadius(10)
+                    }
+                    
+                    Button(action: { showBlockConfirmation = true }) {
+                        HStack {
+                            Image(systemName: "hand.raised.fill")
+                            Text("Block")
+                        }
+                        .font(.system(size: 16, weight: .medium, design: .rounded))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Color(hex: "D4A5A5"))
+                        .cornerRadius(10)
+                    }
+                }
+                .padding(.horizontal, 20)
+                
+                Divider()
+                    .padding(.horizontal, 20)
+                
+                // About section
+                if let description = profile.shortDescription, !description.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("About")
+                            .font(.system(size: 16, weight: .semibold, design: .rounded))
+                            .foregroundColor(Color(hex: "5C3D2E"))
+                        Text(description)
+                            .font(.system(size: 14, design: .rounded))
+                            .foregroundColor(Color(hex: "5C3D2E").opacity(0.8))
+                            .lineLimit(3)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                }
+                
+                // Info row with parenting stage and children
+                HStack(spacing: 20) {
+                    if let stage = profile.parentingStage, !stage.isEmpty {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Stage")
+                                .font(.system(size: 12, weight: .medium, design: .rounded))
+                                .foregroundColor(Color(hex: "5C3D2E").opacity(0.6))
+                            Text(stage)
+                                .font(.system(size: 14, design: .rounded))
+                                .foregroundColor(Color(hex: "5C3D2E"))
+                        }
+                    }
+                    
+                    if let numChildren = profile.numberOfChildren, numChildren > 0 {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Children")
+                                .font(.system(size: 12, weight: .medium, design: .rounded))
+                                .foregroundColor(Color(hex: "5C3D2E").opacity(0.6))
+                            Text("\(numChildren)")
+                                .font(.system(size: 14, design: .rounded))
+                                .foregroundColor(Color(hex: "5C3D2E"))
+                        }
+                    }
+                    
+                    Spacer()
+                }
+                .padding(.horizontal, 20)
+                
+                // Interests (compact)
+                if let interests = profile.interests, !interests.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Interests")
+                            .font(.system(size: 16, weight: .semibold, design: .rounded))
+                            .foregroundColor(Color(hex: "5C3D2E"))
+                        
+                        Text(interests.prefix(5).joined(separator: " • "))
+                            .font(.system(size: 14, design: .rounded))
+                            .foregroundColor(Color(hex: "5C3D2E").opacity(0.8))
+                            .lineLimit(2)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                }
+                
+                Spacer()
+            }
+            .background(Color(hex: "F8F5EE").ignoresSafeArea())
+            .navigationTitle("Profile")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .foregroundColor(Color(hex: "5C3D2E"))
+                }
+            }
+            .confirmationDialog("Block User", isPresented: $showBlockConfirmation, titleVisibility: .visible) {
+                Button("Block", role: .destructive) {
+                    blockUser()
+                }
+                Button("Cancel", role: .cancel) { }
+            } message: {
+                Text("Block \(fullName)? You won't see their messages anymore.")
+            }
+            .alert("Message Sent", isPresented: $showMessageSent) {
+                Button("OK") { dismiss() }
+            } message: {
+                Text("Chat started with \(fullName)")
+            }
+        }
+    }
+    
+    private func startDirectMessage() {
+        guard let currentUserId = userDataManager.profile.userID,
+              let otherUserId = profile.userID else { return }
+        
+        let currentUserName = "\(userDataManager.profile.firstName ?? "") \(userDataManager.profile.lastName ?? "")".trimmingCharacters(in: .whitespaces)
+        let displayCurrentUserName = currentUserName.isEmpty ? "User" : currentUserName
+        
+        Task {
+            do {
+                _ = try await FirebaseService.shared.getOrCreateDirectMessageChannel(
+                    currentUserId: currentUserId,
+                    currentUserName: displayCurrentUserName,
+                    otherUserId: otherUserId,
+                    otherUserName: fullName
+                )
+                await MainActor.run {
+                    showMessageSent = true
+                }
+            } catch {
+                print("❌ Error creating DM: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    private func blockUser() {
+        guard let currentUserId = userDataManager.profile.userID,
+              let otherUserId = profile.userID else { return }
+        
+        Task {
+            do {
+                try await FirebaseService.shared.blockUser(userID: currentUserId, userIDToBlock: otherUserId)
+                await MainActor.run {
+                    dismiss()
+                }
+            } catch {
+                print("❌ Error blocking user: \(error.localizedDescription)")
+            }
+        }
+    }
+}
+
+struct InfoRow: View {
+    let title: String
+    let value: String
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.system(size: 14, weight: .medium, design: .rounded))
+                .foregroundColor(Color(hex: "5C3D2E").opacity(0.6))
+            Text(value)
+                .font(.system(size: 16, design: .rounded))
+                .foregroundColor(Color(hex: "5C3D2E"))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20)
     }
 }
 
