@@ -34,6 +34,8 @@ struct MessagesView: View {
     @State private var titleSaveErrorMessage = ""
     @State private var otherUserDeleted = false
     @State private var showOtherUserDeletedAlert = false
+    @State private var clearedAt: Timestamp? = nil
+    @State private var showClearChatConfirm = false
     
     init(channel: Channel) {
         self.channel = channel
@@ -177,6 +179,12 @@ struct MessagesView: View {
                             }) {
                                 Label("Report User/Content", systemImage: "flag")
                             }
+                        }
+
+                        Button(role: .destructive, action: {
+                            showClearChatConfirm = true
+                        }) {
+                            Label("Clear Chat", systemImage: "trash")
                         }
                         
                         Button(role: .destructive, action: {
@@ -337,6 +345,14 @@ struct MessagesView: View {
             }
         }
         .navigationBarBackButtonHidden(true)
+        .confirmationDialog("Clear Chat", isPresented: $showClearChatConfirm, titleVisibility: .visible) {
+            Button("Clear", role: .destructive) {
+                Task { await clearChatForMe() }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("This will hide previous messages in this chat for you only. Other members will still see them.")
+        }
         .alert("User Unavailable", isPresented: $showOtherUserDeletedAlert) {
             Button("OK", role: .cancel) { }
         } message: {
@@ -406,12 +422,13 @@ struct MessagesView: View {
             .environmentObject(userDataManager)
         }
         .onAppear {
-            loadMessages()
-            setupMessageListener()
-            markMessagesAsRead()
-            // Pre-load other user's profile for DM header
-            if channel.isDirectMessage {
-                Task {
+            Task {
+                await loadClearedAt()
+                loadMessages()
+                setupMessageListener()
+                markMessagesAsRead()
+                // Pre-load other user's profile for DM header
+                if channel.isDirectMessage {
                     await refreshDMState()
                 }
             }
@@ -425,7 +442,7 @@ struct MessagesView: View {
     private func loadMessages() {
         Task {
             do {
-                let fetchedMessages = try await FirebaseService.shared.fetchMessages(channelID: channel.id)
+                let fetchedMessages = try await FirebaseService.shared.fetchMessages(channelID: channel.id, since: clearedAt)
                 await MainActor.run {
                     messages = fetchedMessages
                     isLoading = false
@@ -444,13 +461,40 @@ struct MessagesView: View {
         messageListener?.remove()
         
         // Set up real-time listener
-        messageListener = FirebaseService.shared.listenToMessages(channelID: channel.id) { updatedMessages in
+        messageListener = FirebaseService.shared.listenToMessages(channelID: channel.id, since: clearedAt) { updatedMessages in
             Task { @MainActor in
                 self.messages = updatedMessages
                 self.isLoading = false
                 // Keep read state up-to-date while viewing the chat
                 self.markMessagesAsRead()
             }
+        }
+    }
+
+    private func loadClearedAt() async {
+        guard let userId = currentUserID else { return }
+        do {
+            let ts = try await FirebaseService.shared.getChannelClearedAt(userId: userId, channelId: channel.id)
+            await MainActor.run {
+                clearedAt = ts
+            }
+        } catch {
+            print("⚠️ Error loading clearedAt: \(error.localizedDescription)")
+        }
+    }
+
+    private func clearChatForMe() async {
+        guard let userId = currentUserID else { return }
+        let now = Timestamp(date: Date())
+        do {
+            try await FirebaseService.shared.setChannelClearedAt(userId: userId, channelId: channel.id, timestamp: now)
+            await MainActor.run {
+                clearedAt = now
+                messages = []
+            }
+            setupMessageListener()
+        } catch {
+            print("⚠️ Error clearing chat: \(error.localizedDescription)")
         }
     }
 

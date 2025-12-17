@@ -314,6 +314,7 @@ class FirebaseService {
     func joinWelcomeChannel(userID: String) async throws {
         let welcomeChannelName = "Get to Know Each Other!"
         let welcomeChannelId = "welcome-channel"
+        let now = Timestamp(date: Date())
         
         // Check if the welcome channel exists
         let channelDoc = try await db.collection("channels").document(welcomeChannelId).getDocument()
@@ -326,18 +327,47 @@ class FirebaseService {
                 "isDirectMessage": false,
                 "memberIds": [userID],
                 "adminIds": ["system"],
-                "createdAt": Timestamp(date: Date()),
-                "lastMessageAt": Timestamp(date: Date())
+                "createdAt": now,
+                "lastMessageAt": now
             ]
             try await db.collection("channels").document(welcomeChannelId).setData(welcomeChannel)
+            try await setChannelClearedAt(userId: userID, channelId: welcomeChannelId, timestamp: now)
             print("✅ Created welcome channel and added user \(userID)")
         } else {
-            // Add user to existing welcome channel's memberIds
-            try await db.collection("channels").document(welcomeChannelId).updateData([
-                "memberIds": FieldValue.arrayUnion([userID])
-            ])
-            print("✅ Added user \(userID) to welcome channel")
+            let data = channelDoc.data() ?? [:]
+            let existingMembers = data["memberIds"] as? [String] ?? []
+
+            if !existingMembers.contains(userID) {
+                // Add user to existing welcome channel's memberIds
+                try await db.collection("channels").document(welcomeChannelId).updateData([
+                    "memberIds": FieldValue.arrayUnion([userID])
+                ])
+                // Make the channel appear empty for new joiners until new messages arrive
+                try await setChannelClearedAt(userId: userID, channelId: welcomeChannelId, timestamp: now)
+                print("✅ Added user \(userID) to welcome channel")
+            } else {
+                print("✅ User \(userID) already in welcome channel")
+            }
         }
+    }
+
+    // -----------------------------------------------------
+    // MARK: - Per-User Channel Visibility (Clear Chat)
+    // -----------------------------------------------------
+    func setChannelClearedAt(userId: String, channelId: String, timestamp: Timestamp) async throws {
+        guard !userId.isEmpty, !channelId.isEmpty else { return }
+        try await db.collection("users").document(userId).setData(
+            ["channelClearedAt.\(channelId)": timestamp],
+            merge: true
+        )
+    }
+
+    func getChannelClearedAt(userId: String, channelId: String) async throws -> Timestamp? {
+        guard !userId.isEmpty, !channelId.isEmpty else { return nil }
+        let doc = try await db.collection("users").document(userId).getDocument()
+        guard let data = doc.data() else { return nil }
+        let map = data["channelClearedAt"] as? [String: Any]
+        return map?[channelId] as? Timestamp
     }
     
     // -----------------------------------------------------
@@ -933,10 +963,16 @@ extension FirebaseService {
     }
 
     /// Fetch messages for a channel
-    func fetchMessages(channelID: String, limit: Int = 100) async throws -> [Message] {
-        let snapshot = try await db.collection("channels")
+    func fetchMessages(channelID: String, limit: Int = 100, since: Timestamp? = nil) async throws -> [Message] {
+        var query: Query = db.collection("channels")
             .document(channelID)
             .collection("messages")
+
+        if let since {
+            query = query.whereField("createdAt", isGreaterThan: since)
+        }
+
+        let snapshot = try await query
             .order(by: "createdAt", descending: false)
             .limit(to: limit)
             .getDocuments()
@@ -947,12 +983,18 @@ extension FirebaseService {
     }
     
     /// Listen to messages in real-time for a channel
-    func listenToMessages(channelID: String, onUpdate: @escaping ([Message]) -> Void) -> ListenerRegistration {
-        return db.collection("channels")
+    func listenToMessages(channelID: String, limit: Int = 100, since: Timestamp? = nil, onUpdate: @escaping ([Message]) -> Void) -> ListenerRegistration {
+        var query: Query = db.collection("channels")
             .document(channelID)
             .collection("messages")
+
+        if let since {
+            query = query.whereField("createdAt", isGreaterThan: since)
+        }
+
+        return query
             .order(by: "createdAt", descending: false)
-            .limit(to: 100)
+            .limit(to: limit)
             .addSnapshotListener { snapshot, error in
                 if let error = error {
                     print("❌ Error listening to messages: \(error.localizedDescription)")
