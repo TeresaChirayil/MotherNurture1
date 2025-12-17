@@ -258,6 +258,14 @@ struct CreatePostView: View {
             return
         }
         
+        // Filter content for inappropriate language
+        let filterResult = ContentFilterService.shared.filterContent(trimmedContent)
+        if !filterResult.isSafe {
+            errorMessage = filterResult.reason ?? "Your post contains inappropriate content. Please keep posts respectful and family-friendly."
+            showError = true
+            return
+        }
+        
         // Determine authorName based on anonymity toggle
         let displayName: String
         if postAnonymously {

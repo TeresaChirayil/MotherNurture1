@@ -50,10 +50,9 @@ private struct FlexibleView<Content: View>: View {
                 })
                 .alignmentGuide(.top, computeValue: { d in
                     let result = height
-                    if let last = d[.bottom] as CGFloat? {
-                        DispatchQueue.main.async {
-                            self.totalHeight = max(self.totalHeight, abs(height) + last)
-                        }
+                    let last = d[.bottom]
+                    DispatchQueue.main.async {
+                        self.totalHeight = max(self.totalHeight, abs(height) + last)
                     }
                     return result
                 })

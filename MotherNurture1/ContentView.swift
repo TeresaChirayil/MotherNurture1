@@ -127,23 +127,45 @@ struct ContentView: View {
             loginError = "Please enter your email."
             return
         }
+        
+        // Normalize email (trim and lowercase)
+        let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !trimmedEmail.isEmpty else {
+            loginError = "Please enter a valid email."
+            return
+        }
+        
         isLoggingIn = true
         Task {
             do {
                 // Load profile from Firebase
-                try await userDataManager.loadProfileFromFirebase(email: email)
+                // This will authenticate first, then query for the profile
+                try await userDataManager.loadProfileFromFirebase(email: trimmedEmail)
                 await MainActor.run {
                     isLoggingIn = false
-                    if !userDataManager.isAuthenticated {
-                        loginError = "No account found for this email. Please create a new account."
+                    // If we get here without error, authentication succeeded
+                    // The error handling in loadProfileFromFirebase will throw if profile not found
+                }
+            } catch let error as NSError {
+                await MainActor.run {
+                    isLoggingIn = false
+                    // Use the specific error message from loadProfileFromFirebase
+                    if let errorMessage = error.userInfo[NSLocalizedDescriptionKey] as? String {
+                        loginError = errorMessage
+                    } else {
+                        loginError = "Login failed. Please try again."
                     }
                 }
+                print("❌ Error loading profile: \(error)")
+                print("   Domain: \(error.domain)")
+                print("   Code: \(error.code)")
+                print("   UserInfo: \(error.userInfo)")
             } catch {
                 await MainActor.run {
                     isLoggingIn = false
                     loginError = "Login failed. Please try again."
                 }
-                print("Error loading profile: \(error)")
+                print("❌ Unexpected error type: \(error)")
             }
         }
     }

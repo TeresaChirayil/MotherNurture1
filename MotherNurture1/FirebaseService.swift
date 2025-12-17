@@ -649,5 +649,76 @@ extension FirebaseService {
         ])
         print("✅ Unblocked user: \(userIDToUnblock)")
     }
+    
+    // -----------------------------------------------------
+    // MARK: - Messages
+    // -----------------------------------------------------
+    /// Send a message to a channel
+    func sendMessage(_ message: Message) async throws -> String {
+        let data: [String: Any] = [
+            "channelID": message.channelID,
+            "text": message.text,
+            "authorID": message.authorID,     // MUST already be Auth UID
+            "authorName": message.authorName,
+            "createdAt": message.createdAt,
+            "updatedAt": message.updatedAt
+        ]
+
+        let docRef = try await db.collection("channels")
+            .document(message.channelID)
+            .collection("messages")
+            .addDocument(data: data)
+
+        // Update channel metadata
+        try await db.collection("channels")
+            .document(message.channelID)
+            .setData([
+                "lastMessageAt": Timestamp(),
+                "updatedAt": Timestamp()
+            ], merge: true)
+
+        print("✅ Sent message to channel:", message.channelID)
+        return docRef.documentID
+    }
+
+    /// Fetch messages for a channel
+    func fetchMessages(channelID: String, limit: Int = 100) async throws -> [Message] {
+        let snapshot = try await db.collection("channels")
+            .document(channelID)
+            .collection("messages")
+            .order(by: "createdAt", descending: false)
+            .limit(to: limit)
+            .getDocuments()
+        
+        return snapshot.documents.compactMap { doc in
+            Message.fromDictionary(doc.data(), id: doc.documentID)
+        }
+    }
+    
+    /// Listen to messages in real-time for a channel
+    func listenToMessages(channelID: String, onUpdate: @escaping ([Message]) -> Void) -> ListenerRegistration {
+        return db.collection("channels")
+            .document(channelID)
+            .collection("messages")
+            .order(by: "createdAt", descending: false)
+            .limit(to: 100)
+            .addSnapshotListener { snapshot, error in
+                if let error = error {
+                    print("❌ Error listening to messages: \(error.localizedDescription)")
+                    return
+                }
+                
+                guard let snapshot = snapshot else {
+                    print("⚠️ No snapshot returned from message listener")
+                    return
+                }
+                
+                let messages = snapshot.documents.compactMap { doc in
+                    Message.fromDictionary(doc.data(), id: doc.documentID)
+                }
+                
+                onUpdate(messages)
+            }
+    }
 }
 

@@ -1,0 +1,220 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- Helper Functions ---
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // ---- users collection ----
+    match /users/{userId} {
+      // Authenticated users can read any user profile
+      allow read: if isAuthenticated();
+      
+      // Users can create their own profile (during sign-up)
+      allow create: if isAuthenticated()
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasAll([
+          "userID",
+          "email",
+          "createdAt"
+        ]);
+      
+      // Users can update their own profile (including blockedUsers field)
+      allow update: if isAuthenticated()
+        && request.auth.uid == userId
+        && request.resource.data.userID == userId; // Prevent changing userID
+      
+      // Users can delete their own profile
+      allow delete: if isAuthenticated()
+        && request.auth.uid == userId;
+    }
+
+    // ---- channels & members ----
+    match /channels/{channelId} {
+      // Authenticated users can read channels
+      allow read: if isAuthenticated();
+      
+      // Authenticated users can create channels
+      allow create: if isAuthenticated();
+      
+      // Authenticated users can update channels
+      allow update: if isAuthenticated();
+      
+      // Messages subcollection - THIS WAS MISSING!
+      match /messages/{messageId} {
+        // Authenticated users can read all messages in a channel
+        allow read: if isAuthenticated();
+        
+        // Authenticated users can create messages with their own authorID
+        allow create: if isAuthenticated()
+          && request.auth.uid == request.resource.data.authorID
+          && request.resource.data.keys().hasAll([
+            "channelID",
+            "text",
+            "authorID",
+            "authorName",
+            "createdAt",
+            "updatedAt"
+          ])
+          && request.resource.data.channelID is string
+          && request.resource.data.text is string
+          && request.resource.data.authorID is string
+          && request.resource.data.authorName is string;
+        
+        // Users can update their own messages
+        allow update: if isAuthenticated()
+          && request.auth.uid == resource.data.authorID
+          && request.resource.data.authorID == resource.data.authorID; // Prevent changing authorID
+        
+        // Users can delete their own messages
+        allow delete: if isAuthenticated()
+          && request.auth.uid == resource.data.authorID;
+      }
+      
+      // Channel members subcollection
+      match /members/{memberId} {
+        // Authenticated users can read members
+        allow read: if isAuthenticated();
+        
+        // Authenticated users can add themselves to channels
+        allow create: if isAuthenticated()
+          && request.resource.data.userID == request.auth.uid;
+        
+        // Users can delete their own membership
+        allow delete: if isAuthenticated()
+          && resource.data.userID == request.auth.uid;
+      }
+    }
+
+    // ---- forumPosts collection ----
+    match /forumPosts/{postId} {
+      // Anyone can read posts (for public forum)
+      allow read: if true;
+      
+      // Authenticated users can create posts
+      allow create: if isAuthenticated()
+        && request.auth.uid == request.resource.data.authorID
+        && request.resource.data.keys().hasAll([
+          "title",
+          "content",
+          "authorID",
+          "authorName",
+          "createdAt",
+          "updatedAt",
+          "likeCount",
+          "commentCount"
+        ])
+        && request.resource.data.authorID is string
+        && request.resource.data.title is string
+        && request.resource.data.content is string;
+      
+      // Author can update ANY field of their own post
+      allow update: if isAuthenticated()
+        && request.auth.uid == resource.data.authorID
+        && request.resource.data.authorID == resource.data.authorID; // Prevent changing authorID
+      
+      // Author can delete their own post
+      allow delete: if isAuthenticated()
+        && request.auth.uid == resource.data.authorID;
+      
+      // Any authenticated user can update ONLY the commentCount field (for comment count updates)
+      allow update: if isAuthenticated()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["commentCount", "updatedAt"])
+        && request.resource.data.commentCount is int;
+      
+      // Any authenticated user can update ONLY the likeCount field (for like count updates)
+      allow update: if isAuthenticated()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["likeCount", "updatedAt"])
+        && request.resource.data.likeCount is int;
+    }
+
+    // ---- comments collection ----
+    match /comments/{commentId} {
+      // Anyone can read comments (for public forum)
+      allow read: if true;
+      
+      // Authenticated users can create comments
+      allow create: if isAuthenticated()
+        && request.auth.uid == request.resource.data.authorID
+        && request.resource.data.keys().hasAll([
+          "postID",
+          "content",
+          "authorID",
+          "authorName",
+          "createdAt",
+          "updatedAt"
+        ])
+        && request.resource.data.postID is string
+        && request.resource.data.authorID is string
+        && request.resource.data.content is string
+        && request.resource.data.authorName is string;
+      
+      // Author can update their own comment
+      allow update: if isAuthenticated()
+        && request.auth.uid == resource.data.authorID
+        && request.resource.data.authorID == resource.data.authorID; // Prevent changing authorID
+      
+      // Author can delete their own comment
+      allow delete: if isAuthenticated()
+        && request.auth.uid == resource.data.authorID;
+    }
+
+    // ---- likes collection ----
+    match /likes/{likeId} {
+      // Anyone can read likes (for public forum)
+      allow read: if true;
+      
+      // Authenticated users can create likes
+      allow create: if isAuthenticated()
+        && request.auth.uid == request.resource.data.userID
+        && request.resource.data.keys().hasAll([
+          "postID",
+          "userID",
+          "createdAt"
+        ])
+        && request.resource.data.postID is string
+        && request.resource.data.userID is string;
+      
+      // Users can update their own likes (though typically not needed)
+      allow update: if isAuthenticated()
+        && request.auth.uid == resource.data.userID;
+      
+      // Users can delete their own likes
+      allow delete: if isAuthenticated()
+        && request.auth.uid == resource.data.userID;
+    }
+
+    // ---- reports collection ----
+    match /reports/{reportId} {
+      // Users should NOT see other people's reports
+      allow read: if false;
+      
+      // Any authenticated user can file a report
+      allow create: if isAuthenticated()
+        && request.resource.data.keys().hasAll([
+          "postID",
+          "reporterID",
+          "reason",
+          "createdAt"
+        ])
+        && request.resource.data.reporterID == request.auth.uid
+        && request.resource.data.reason is string
+        && request.resource.data.postID is string;
+      
+      // No updates or deletes allowed for reports
+      allow update, delete: if false;
+    }
+
+    // ---- everything else denied ----
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

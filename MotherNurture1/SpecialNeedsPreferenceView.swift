@@ -38,6 +38,7 @@ struct SpecialNeedsPreferenceView: View {
                             .multilineTextAlignment(.center)
                             .frame(maxWidth: .infinity)
                             .padding(.horizontal, 40)
+                            .padding(.top, -10)
                         
                         // Options
                         VStack(spacing: 16) {
@@ -48,12 +49,13 @@ struct SpecialNeedsPreferenceView: View {
                                     Text(option.rawValue)
                                         .font(.system(size: 18, weight: .medium, design: .rounded))
                                         .foregroundColor(selectedOption == option ? .white : Color(hex: "5C3D2E"))
-                                        .frame(maxWidth: .infinity)
-                                        .frame(height: 56)
+                                        .multilineTextAlignment(.center)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                        .padding(.vertical, 14)
+                                        .padding(.horizontal, 16)
+                                        .frame(maxWidth: .infinity, alignment: .center)
                                         .background(selectedOption == option ? Color(hex: "8B9A7E") : Color(hex: "D4C4B0"))
                                         .cornerRadius(12)
-                                        .multilineTextAlignment(.center)
-                                        .lineLimit(3)
                                 }
                                 .buttonStyle(PlainButtonStyle())
                             }
@@ -107,7 +109,7 @@ struct SpecialNeedsPreferenceView: View {
                     .padding(.bottom, 40)
                 }
                         .navigationDestination(isPresented: $navigateToLanguagePreferences) {
-                            LanguagePreferencesView()
+                            FinalTouchView()
                                 .environmentObject(userDataManager)
                         }
             }

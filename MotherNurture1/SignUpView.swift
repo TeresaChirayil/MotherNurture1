@@ -76,12 +76,24 @@ struct SignUpView: View {
                 ScrollView {
                     VStack(spacing: 20) {
                         // First Name Field
-                        TextField("First Name", text: $firstName)
-                            .textFieldStyle(SignUpTextFieldStyle())
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("First Name")
+                                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                .foregroundColor(Color(hex: "5C3D2E"))
+                            
+                            TextField("", text: $firstName)
+                                .textFieldStyle(SignUpTextFieldStyle())
+                        }
                         
                         // Last Name Field
-                        TextField("Last Name", text: $lastName)
-                            .textFieldStyle(SignUpTextFieldStyle())
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Last Name")
+                                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                .foregroundColor(Color(hex: "5C3D2E"))
+                            
+                            TextField("", text: $lastName)
+                                .textFieldStyle(SignUpTextFieldStyle())
+                        }
                         
                         // Date of Birth Field
                         HStack {
@@ -124,25 +136,50 @@ struct SignUpView: View {
                         }
                         
                         // Email Field
-                        TextField("Email", text: $email)
-                            .textFieldStyle(SignUpTextFieldStyle())
-                            .keyboardType(.emailAddress)
-                            .autocapitalization(.none)
-                            .disableAutocorrection(true)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Email")
+                                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                .foregroundColor(Color(hex: "5C3D2E"))
+                            
+                            TextField("", text: $email)
+                                .textFieldStyle(SignUpTextFieldStyle())
+                                .keyboardType(.emailAddress)
+                                .autocapitalization(.none)
+                                .disableAutocorrection(true)
+                        }
 
-                        // Create Password with Show/Hide
-                        PasswordField(
-                            title: "Create Password (min 6 chars)",
-                            text: $password,
-                            isVisible: $isPasswordVisible
-                        )
-
-                        // Confirm Password with Show/Hide
-                        PasswordField(
-                            title: "Confirm Password",
-                            text: $confirmPassword,
-                            isVisible: $isConfirmPasswordVisible
-                        )
+                        // Password Fields with clear labels and requirement text
+                        VStack(alignment: .leading, spacing: 8) {
+                            // Create Password with Show/Hide
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Create Password")
+                                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                    .foregroundColor(Color(hex: "5C3D2E"))
+                                
+                                PasswordField(
+                                    title: "At least 6 characters",
+                                    text: $password,
+                                    isVisible: $isPasswordVisible
+                                )
+                            }
+                            
+                            // Confirm Password with Show/Hide
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Confirm Password")
+                                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                    .foregroundColor(Color(hex: "5C3D2E"))
+                                
+                                PasswordField(
+                                    title: "Re-enter your password",
+                                    text: $confirmPassword,
+                                    isVisible: $isConfirmPasswordVisible
+                                )
+                            }
+                            
+                            Text("Passwords must be at least 6 characters long.")
+                                .font(.system(size: 13, weight: .regular, design: .rounded))
+                                .foregroundColor(Color(hex: "5C3D2E"))
+                        }
 
                         // EULA Acceptance
                         VStack(alignment: .leading, spacing: 8) {
@@ -474,13 +511,13 @@ private struct PasswordField: View {
             if isVisible {
                 TextField(title, text: $text)
                     .font(.system(size: 16, design: .rounded))
-                    .foregroundColor(Color(hex: "5C3D2E"))
+                    .foregroundColor(Color(hex: "3C2A1E"))
                     .textInputAutocapitalization(.never)
                     .disableAutocorrection(true)
             } else {
                 SecureField(title, text: $text)
                     .font(.system(size: 16, design: .rounded))
-                    .foregroundColor(Color(hex: "5C3D2E"))
+                    .foregroundColor(Color(hex: "3C2A1E"))
             }
             
             Button(action: { isVisible.toggle() }) {
@@ -507,7 +544,7 @@ struct SignUpTextFieldStyle: TextFieldStyle {
             .padding()
             .background(Color(hex: "D4C4B0")) // Light brown background
             .cornerRadius(8)
-            .foregroundColor(Color(hex: "5C3D2E"))
+            .foregroundColor(Color(hex: "3C2A1E"))
             .font(.system(size: 16, design: .rounded))
     }
 }
