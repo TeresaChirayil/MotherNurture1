@@ -601,7 +601,7 @@ struct MatchmakingView: View {
     @State private var feedbackText: String? = nil
     @State private var showMatchPopup: Bool = false
     @State private var matchedProfile: Profile? = nil
-    @State private var navigateToMessages: Bool = false
+    @State private var dmChannelToNavigateTo: Channel? = nil
     @State private var groupToNavigateTo: Channel? = nil
     @State private var showError: Bool = false
     @State private var errorMessage: String = ""
@@ -715,7 +715,18 @@ struct MatchmakingView: View {
     }
     
     private func handleGroupTap(_ groupName: String) {
-        let channel = Channel(name: groupName, timeAgo: "now", isDirectMessage: false)
+        let currentUserId = userDataManager.profile.userID ?? ""
+        let channel = Channel(
+            id: UUID().uuidString,
+            name: groupName,
+            description: nil,
+            imageURL: nil,
+            isDirectMessage: false,
+            memberIds: currentUserId.isEmpty ? [] : [currentUserId],
+            adminIds: currentUserId.isEmpty ? [] : [currentUserId],
+            createdAt: Date(),
+            lastMessageAt: Date()
+        )
         groupToNavigateTo = channel
     }
     
@@ -871,16 +882,24 @@ struct MatchmakingView: View {
                             
                             HStack(spacing: 16) {
                                 Button(action: {
-                                    if let profile = matchedProfile {
-                                        let newChannel = Channel(
-                                            name: profile.name.trimmingCharacters(in: .whitespaces),
-                                            timeAgo: "now",
-                                            isDirectMessage: true
-                                        )
-                                        ChannelsManager.shared.addChannel(newChannel)
+                                    guard let profile = matchedProfile else { return }
+                                    Task {
+                                        do {
+                                            let channel = try await FirebaseService.shared.getOrCreateDirectMessageChannel(
+                                                otherUserId: profile.id,
+                                                otherUserName: profile.name.trimmingCharacters(in: .whitespaces)
+                                            )
+                                            await MainActor.run {
+                                                dmChannelToNavigateTo = channel
+                                                showMatchPopup = false
+                                            }
+                                        } catch {
+                                            await MainActor.run {
+                                                errorMessage = "Could not start chat: \(error.localizedDescription)"
+                                                showError = true
+                                            }
+                                        }
                                     }
-                                    navigateToMessages = true
-                                    showMatchPopup = false
                                 }) {
                                     Text("Message")
                                         .font(.headline)
@@ -915,15 +934,9 @@ struct MatchmakingView: View {
                 }
             }
             .background(Color.appBackground.ignoresSafeArea())
-            .navigationDestination(isPresented: $navigateToMessages) {
-                if let profile = matchedProfile {
-                    let channelName = profile.name.trimmingCharacters(in: .whitespaces)
-                    MessagesView(channel: Channel(name: channelName, timeAgo: "now", isDirectMessage: true))
-                        .environmentObject(userDataManager)
-                } else {
-                    MessagesView(channel: Channel(name: "Direct Message", timeAgo: "now", isDirectMessage: true))
-                        .environmentObject(userDataManager)
-                }
+            .navigationDestination(item: $dmChannelToNavigateTo) { channel in
+                MessagesView(channel: channel)
+                    .environmentObject(userDataManager)
             }
             .navigationDestination(item: $groupToNavigateTo) { channel in
                 MessagesView(channel: channel)
@@ -947,7 +960,7 @@ struct MatchmakingView: View {
     private func loadProfiles() async {
         isLoading = true
         do {
-            let currentUserID = userDataManager.profile.userID
+            let currentUserID = userDataManager.authUserID ?? userDataManager.profile.userID
             let userProfiles = try await FirebaseService.shared.fetchAllUserProfiles(
                 excludingUserID: currentUserID,
                 limit: 50
@@ -958,11 +971,14 @@ struct MatchmakingView: View {
             await MainActor.run {
                 var base = matchmakingProfiles
                 if base.isEmpty { base = mockProfiles }
+                if let currentUserID {
+                    base = base.filter { $0.id != currentUserID }
+                }
                 // Exclude seen
                 let unseen = base.filter { !seenProfileIDs.contains($0.id) }
                 // Ensure per-user seed
                 if shuffleSeed == 0 {
-                    let seed = Int((userDataManager.profile.userID ?? UUID().uuidString).hashValue & 0x7fffffff)
+                    let seed = Int((currentUserID ?? UUID().uuidString).hashValue & 0x7fffffff)
                     shuffleSeed = max(1, seed)
                 }
                 let shuffled = shuffleDeterministic(unseen, seed: shuffleSeed)
@@ -977,7 +993,8 @@ struct MatchmakingView: View {
                 self.showError = true
                 let unseen = mockProfiles.filter { !seenProfileIDs.contains($0.id) }
                 if shuffleSeed == 0 {
-                    let seed = Int((userDataManager.profile.userID ?? UUID().uuidString).hashValue & 0x7fffffff)
+                    let currentUserID = userDataManager.authUserID ?? userDataManager.profile.userID
+                    let seed = Int((currentUserID ?? UUID().uuidString).hashValue & 0x7fffffff)
                     shuffleSeed = max(1, seed)
                 }
                 self.profiles = shuffleDeterministic(unseen, seed: shuffleSeed)

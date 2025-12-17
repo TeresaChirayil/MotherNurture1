@@ -198,7 +198,7 @@ struct MessagesView: View {
     private func loadMessages() {
         Task {
             do {
-                let fetchedMessages = try await FirebaseService.shared.fetchMessages(channelID: channel.name)
+                let fetchedMessages = try await FirebaseService.shared.fetchMessages(channelID: channel.id)
                 await MainActor.run {
                     messages = fetchedMessages
                     isLoading = false
@@ -217,7 +217,7 @@ struct MessagesView: View {
         messageListener?.remove()
         
         // Set up real-time listener
-        messageListener = FirebaseService.shared.listenToMessages(channelID: channel.name) { updatedMessages in
+        messageListener = FirebaseService.shared.listenToMessages(channelID: channel.id) { updatedMessages in
             Task { @MainActor in
                 self.messages = updatedMessages
                 self.isLoading = false
@@ -242,7 +242,7 @@ struct MessagesView: View {
         }
 
         let message = Message(
-            channelID: channel.name,
+            channelID: channel.id,
             text: trimmedMessage,
             authorID: authUID,
             authorName: currentUserName,
@@ -315,12 +315,22 @@ struct MessagesView: View {
     }
     
     private func reportUser() {
-        let channelID = channel.id.uuidString
+        let channelID = channel.id
         MailHelper.reportMessage(channelID: channelID, channelName: channel.name, userName: channel.name)
     }
 }
 
 #Preview {
-    MessagesView(channel: Channel(name: "Single moms", timeAgo: "2h"))
+    MessagesView(channel: Channel(
+        id: "preview-channel",
+        name: "Single moms",
+        description: nil,
+        imageURL: nil,
+        isDirectMessage: false,
+        memberIds: [],
+        adminIds: [],
+        createdAt: Date(),
+        lastMessageAt: Date()
+    ))
 }
 

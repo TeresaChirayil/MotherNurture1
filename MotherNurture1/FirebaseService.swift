@@ -653,6 +653,41 @@ extension FirebaseService {
     // -----------------------------------------------------
     // MARK: - Messages
     // -----------------------------------------------------
+    func getOrCreateDirectMessageChannel(otherUserId: String, otherUserName: String) async throws -> Channel {
+        guard let currentUserId = getCurrentUserID() else {
+            throw NSError(domain: "FirebaseService", code: 401, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])
+        }
+
+        let snapshot = try await db.collection("channels")
+            .whereField("isDirectMessage", isEqualTo: true)
+            .whereField("memberIds", arrayContains: currentUserId)
+            .getDocuments()
+
+        for doc in snapshot.documents {
+            let data = doc.data()
+            let memberIds = data["memberIds"] as? [String] ?? []
+            if memberIds.count == 2 && memberIds.contains(otherUserId) {
+                return Channel(id: doc.documentID, data: data)
+            }
+        }
+
+        let channelId = db.collection("channels").document().documentID
+        let channel = Channel(
+            id: channelId,
+            name: otherUserName,
+            description: nil,
+            imageURL: nil,
+            isDirectMessage: true,
+            memberIds: [currentUserId, otherUserId],
+            adminIds: [currentUserId],
+            createdAt: Date(),
+            lastMessageAt: Date()
+        )
+
+        try await db.collection("channels").document(channelId).setData(channel.toDictionary(), merge: true)
+        return channel
+    }
+
     /// Send a message to a channel
     func sendMessage(_ message: Message) async throws -> String {
         let data: [String: Any] = [
