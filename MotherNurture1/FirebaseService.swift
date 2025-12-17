@@ -339,6 +339,62 @@ class FirebaseService {
     }
     
     // -----------------------------------------------------
+    // MARK: - Update Channel
+    // -----------------------------------------------------
+    /// Update channel properties (name, description, imageURL)
+    func updateChannel(_ channel: Channel) async throws {
+        var data: [String: Any] = [
+            "name": channel.name,
+            "updatedAt": Timestamp(date: Date())
+        ]
+        
+        if let description = channel.description {
+            data["description"] = description
+        }
+        
+        if let imageURL = channel.imageURL {
+            data["imageURL"] = imageURL
+        }
+        
+        try await db.collection("channels").document(channel.id).updateData(data)
+        print("✅ Updated channel \(channel.id)")
+    }
+    
+    // -----------------------------------------------------
+    // MARK: - Get Users From DM Channels
+    // -----------------------------------------------------
+    /// Get all users the current user has DM channels with (users they've chatted with)
+    func getUsersFromDMChannels(currentUserId: String) async throws -> [UserProfile] {
+        // Get all DM channels for the current user
+        let snapshot = try await db.collection("channels")
+            .whereField("isDirectMessage", isEqualTo: true)
+            .whereField("memberIds", arrayContains: currentUserId)
+            .getDocuments()
+        
+        // Collect all other user IDs from DM channels
+        var otherUserIds = Set<String>()
+        for doc in snapshot.documents {
+            let data = doc.data()
+            let memberIds = data["memberIds"] as? [String] ?? []
+            for memberId in memberIds {
+                if memberId != currentUserId {
+                    otherUserIds.insert(memberId)
+                }
+            }
+        }
+        
+        // Fetch profiles for all those users
+        var profiles: [UserProfile] = []
+        for userId in otherUserIds {
+            if let profile = try await getUserProfile(userID: userId) {
+                profiles.append(profile)
+            }
+        }
+        
+        return profiles
+    }
+    
+    // -----------------------------------------------------
     // MARK: - Get Channel Members
     // -----------------------------------------------------
     func getChannelMembers(channelName: String) async throws -> [String] {

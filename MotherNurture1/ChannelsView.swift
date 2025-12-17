@@ -175,20 +175,19 @@ struct ChannelsView: View {
                 })
                 .environmentObject(userDataManager)
             }
-            .sheet(isPresented: $isEditingChannel, onDismiss: {
-                channelToEdit = nil
-            }) {
-                if let channel = channelToEdit {
-                    EditChannelView(
-                        channel: channel,
-                        isPresented: $isEditingChannel,
-                        onSave: { updatedChannel in
-                            Task {
-                                await viewModel.updateChannel(updatedChannel)
-                            }
+            .sheet(item: $channelToEdit, onDismiss: {
+                isEditingChannel = false
+            }) { channel in
+                EditChannelView(
+                    channel: channel,
+                    isPresented: $isEditingChannel,
+                    onSave: { updatedChannel in
+                        Task {
+                            await viewModel.updateChannel(updatedChannel)
                         }
-                    )
-                }
+                    }
+                )
+                .environmentObject(userDataManager)
             }
             .sheet(isPresented: $showMembers) {
                 if let channel = selectedChannelForMembers {
@@ -217,7 +216,6 @@ struct ChannelsView: View {
     
     private func editChannel(_ channel: Channel) {
         channelToEdit = channel
-        isEditingChannel = true
     }
     
     private func showChannelMembers(_ channel: Channel) {
@@ -354,12 +352,22 @@ struct ChannelRow: View {
 
 struct EditChannelView: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var userDataManager: UserDataManager
     let channel: Channel
     @Binding var isPresented: Bool
     let onSave: (Channel) -> Void
 
     @State private var channelName: String
     @State private var channelDescription: String
+    @State private var selectedImage: UIImage? = nil
+    @State private var showingImagePicker = false
+    @State private var showMemberPicker = false
+    @State private var availableUsers: [UserProfile] = []
+    @State private var selectedMemberIds: Set<String> = []
+    @State private var isLoadingUsers = false
+    @State private var isSaving = false
+    @State private var currentMembers: [UserProfile] = []
+    @State private var isLoadingMembers = false
 
     init(channel: Channel, isPresented: Binding<Bool>, onSave: @escaping (Channel) -> Void) {
         self.channel = channel
@@ -370,18 +378,203 @@ struct EditChannelView: View {
     }
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
                 Color(hex: "F8F5EE")
                     .ignoresSafeArea()
 
-                Form {
-                    Section {
-                        TextField("Channel name", text: $channelName)
-                        TextField("Description", text: $channelDescription)
+                ScrollView {
+                    VStack(spacing: 24) {
+                        // Channel Photo Section
+                        VStack(spacing: 12) {
+                            Text("Channel Photo")
+                                .font(.system(size: 16, weight: .medium, design: .rounded))
+                                .foregroundColor(Color(hex: "5C3D2E"))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            
+                            Button(action: {
+                                showingImagePicker = true
+                            }) {
+                                ZStack {
+                                    Circle()
+                                        .fill(Color(hex: "9BA897"))
+                                        .frame(width: 100, height: 100)
+                                    
+                                    if let selectedImage = selectedImage {
+                                        Image(uiImage: selectedImage)
+                                            .resizable()
+                                            .scaledToFill()
+                                            .frame(width: 100, height: 100)
+                                            .clipShape(Circle())
+                                    } else if let imageURL = channel.imageURL, let url = URL(string: imageURL) {
+                                        AsyncImage(url: url) { image in
+                                            image
+                                                .resizable()
+                                                .scaledToFill()
+                                        } placeholder: {
+                                            Image(systemName: "photo")
+                                                .foregroundColor(.white)
+                                                .font(.system(size: 30))
+                                        }
+                                        .frame(width: 100, height: 100)
+                                        .clipShape(Circle())
+                                    } else {
+                                        Image(systemName: "camera.fill")
+                                            .foregroundColor(.white)
+                                            .font(.system(size: 30))
+                                    }
+                                    
+                                    // Edit overlay
+                                    Circle()
+                                        .fill(Color.black.opacity(0.3))
+                                        .frame(width: 100, height: 100)
+                                        .overlay(
+                                            Image(systemName: "pencil")
+                                                .foregroundColor(.white)
+                                                .font(.system(size: 20))
+                                        )
+                                }
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 20)
+                        
+                        // Channel Name
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Channel Name")
+                                .font(.system(size: 16, weight: .medium, design: .rounded))
+                                .foregroundColor(Color(hex: "5C3D2E"))
+                            
+                            TextField("Channel name", text: $channelName)
+                                .padding()
+                                .background(Color(hex: "E8E1D7"))
+                                .cornerRadius(10)
+                                .foregroundColor(Color(hex: "5C3D2E"))
+                        }
+                        .padding(.horizontal, 20)
+                        
+                        // Description
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Description")
+                                .font(.system(size: 16, weight: .medium, design: .rounded))
+                                .foregroundColor(Color(hex: "5C3D2E"))
+                            
+                            TextField("Description (optional)", text: $channelDescription)
+                                .padding()
+                                .background(Color(hex: "E8E1D7"))
+                                .cornerRadius(10)
+                                .foregroundColor(Color(hex: "5C3D2E"))
+                        }
+                        .padding(.horizontal, 20)
+                        
+                        // Current Members Section
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Current Members (\(channel.memberIds.count))")
+                                .font(.system(size: 16, weight: .medium, design: .rounded))
+                                .foregroundColor(Color(hex: "5C3D2E"))
+                            
+                            if isLoadingMembers {
+                                HStack {
+                                    Spacer()
+                                    ProgressView()
+                                    Spacer()
+                                }
+                                .padding()
+                            } else if currentMembers.isEmpty {
+                                Text("No members found")
+                                    .font(.system(size: 14, design: .rounded))
+                                    .foregroundColor(Color(hex: "5C3D2E").opacity(0.6))
+                                    .padding()
+                            } else {
+                                VStack(spacing: 8) {
+                                    ForEach(currentMembers, id: \.userID) { member in
+                                        HStack(spacing: 12) {
+                                            if let photoURL = member.photoURL, let url = URL(string: photoURL) {
+                                                AsyncImage(url: url) { image in
+                                                    image
+                                                        .resizable()
+                                                        .scaledToFill()
+                                                } placeholder: {
+                                                    Circle()
+                                                        .fill(Color(hex: "D4C4B0"))
+                                                        .overlay(
+                                                            Text(member.firstName?.prefix(1) ?? "?")
+                                                                .font(.system(size: 14, weight: .medium))
+                                                                .foregroundColor(Color(hex: "5C3D2E"))
+                                                        )
+                                                }
+                                                .frame(width: 36, height: 36)
+                                                .clipShape(Circle())
+                                            } else {
+                                                Circle()
+                                                    .fill(Color(hex: "D4C4B0"))
+                                                    .frame(width: 36, height: 36)
+                                                    .overlay(
+                                                        Text(member.firstName?.prefix(1) ?? "?")
+                                                            .font(.system(size: 14, weight: .medium))
+                                                            .foregroundColor(Color(hex: "5C3D2E"))
+                                                    )
+                                            }
+                                            
+                                            Text("\(member.firstName ?? "") \(member.lastName ?? "")")
+                                                .font(.system(size: 16, design: .rounded))
+                                                .foregroundColor(Color(hex: "5C3D2E"))
+                                            
+                                            Spacer()
+                                            
+                                            if member.userID == userDataManager.profile.userID {
+                                                Text("You")
+                                                    .font(.system(size: 12, design: .rounded))
+                                                    .foregroundColor(Color(hex: "8B9A7E"))
+                                                    .padding(.horizontal, 8)
+                                                    .padding(.vertical, 4)
+                                                    .background(Color(hex: "8B9A7E").opacity(0.2))
+                                                    .cornerRadius(8)
+                                            }
+                                        }
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 8)
+                                        .background(Color(hex: "E8E1D7"))
+                                        .cornerRadius(10)
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                        
+                        // Add Members Section
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Add Members")
+                                .font(.system(size: 16, weight: .medium, design: .rounded))
+                                .foregroundColor(Color(hex: "5C3D2E"))
+                            
+                            Button(action: {
+                                showMemberPicker = true
+                                loadAvailableUsers()
+                            }) {
+                                HStack {
+                                    Image(systemName: "person.badge.plus")
+                                        .foregroundColor(Color(hex: "5C3D2E"))
+                                    Text(selectedMemberIds.isEmpty ? "Tap to add members" : "\(selectedMemberIds.count) new member(s) to add")
+                                        .foregroundColor(Color(hex: "5C3D2E"))
+                                        .font(.system(size: 16, design: .rounded))
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .foregroundColor(Color(hex: "5C3D2E"))
+                                        .font(.system(size: 14))
+                                }
+                                .padding()
+                                .background(Color(hex: "E8E1D7"))
+                                .cornerRadius(10)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+                        .padding(.horizontal, 20)
+                        
+                        Spacer(minLength: 40)
                     }
                 }
-                .scrollContentBackground(.hidden)
             }
             .navigationTitle("Edit Channel")
             .navigationBarTitleDisplayMode(.inline)
@@ -395,16 +588,234 @@ struct EditChannelView: View {
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Save") {
-                        var updated = channel
-                        updated.name = channelName
-                        updated.description = channelDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : channelDescription
-                        onSave(updated)
-                        isPresented = false
+                    if isSaving {
+                        ProgressView()
+                            .tint(Color(hex: "8B9A7E"))
+                    } else {
+                        Button("Save") {
+                            saveChannel()
+                        }
+                        .foregroundColor(Color(hex: "8B9A7E"))
+                        .disabled(channelName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+                }
+            }
+            .sheet(isPresented: $showingImagePicker) {
+                ImagePicker(selectedImage: $selectedImage)
+            }
+            .sheet(isPresented: $showMemberPicker) {
+                EditChannelMemberPickerView(
+                    availableUsers: $availableUsers,
+                    selectedMemberIds: $selectedMemberIds,
+                    isLoading: $isLoadingUsers,
+                    existingMemberIds: channel.memberIds
+                )
+            }
+            .onAppear {
+                loadCurrentMembers()
+            }
+        }
+    }
+    
+    private func loadCurrentMembers() {
+        isLoadingMembers = true
+        
+        Task {
+            var members: [UserProfile] = []
+            for memberId in channel.memberIds {
+                if let profile = try? await FirebaseService.shared.getUserProfile(userID: memberId) {
+                    members.append(profile)
+                }
+            }
+            await MainActor.run {
+                currentMembers = members
+                isLoadingMembers = false
+            }
+        }
+    }
+    
+    private func loadAvailableUsers() {
+        guard !isLoadingUsers else { return }
+        guard let currentUserId = userDataManager.profile.userID else { return }
+        isLoadingUsers = true
+        
+        Task {
+            do {
+                // Only show users the current user has DM channels with
+                let users = try await FirebaseService.shared.getUsersFromDMChannels(currentUserId: currentUserId)
+                // Filter out users already in the channel
+                let filteredUsers = users.filter { user in
+                    guard let userId = user.userID else { return false }
+                    return !channel.memberIds.contains(userId)
+                }
+                await MainActor.run {
+                    availableUsers = filteredUsers
+                    isLoadingUsers = false
+                }
+            } catch {
+                print("Error loading users: \(error)")
+                await MainActor.run {
+                    isLoadingUsers = false
+                }
+            }
+        }
+    }
+    
+    private func saveChannel() {
+        isSaving = true
+        
+        Task {
+            do {
+                var updated = channel
+                updated.name = channelName
+                updated.description = channelDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : channelDescription
+                
+                // Upload image if selected
+                if let image = selectedImage, let imageData = image.jpegData(compressionQuality: 0.8) {
+                    let fileName = "channel_\(channel.id).jpg"
+                    let storageRef = Storage.storage().reference().child("channel_photos/\(fileName)")
+                    _ = try await storageRef.putDataAsync(imageData, metadata: nil)
+                    let downloadURL = try await storageRef.downloadURL()
+                    updated.imageURL = downloadURL.absoluteString
+                }
+                
+                // Add new members if selected
+                if !selectedMemberIds.isEmpty {
+                    try await FirebaseService.shared.addMembersToChannel(
+                        channelId: channel.id,
+                        memberIds: Array(selectedMemberIds)
+                    )
+                }
+                
+                await MainActor.run {
+                    onSave(updated)
+                    isSaving = false
+                    isPresented = false
+                    dismiss()
+                }
+            } catch {
+                print("Error saving channel: \(error)")
+                await MainActor.run {
+                    isSaving = false
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Edit Channel Member Picker View
+struct EditChannelMemberPickerView: View {
+    @Environment(\.dismiss) var dismiss
+    @Binding var availableUsers: [UserProfile]
+    @Binding var selectedMemberIds: Set<String>
+    @Binding var isLoading: Bool
+    let existingMemberIds: [String]
+    
+    @State private var searchText = ""
+    
+    var filteredUsers: [UserProfile] {
+        if searchText.isEmpty {
+            return availableUsers
+        }
+        return availableUsers.filter { user in
+            let fullName = "\(user.firstName ?? "") \(user.lastName ?? "")".lowercased()
+            return fullName.contains(searchText.lowercased())
+        }
+    }
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color(hex: "F8F5EE").ignoresSafeArea()
+                
+                VStack(spacing: 0) {
+                    // Search bar
+                    HStack {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundColor(Color(hex: "5C3D2E"))
+                        TextField("Search users", text: $searchText)
+                            .foregroundColor(Color(hex: "5C3D2E"))
+                    }
+                    .padding(10)
+                    .background(Color(hex: "E8E1D7"))
+                    .cornerRadius(10)
+                    .padding()
+                    
+                    if isLoading {
+                        Spacer()
+                        ProgressView()
+                        Spacer()
+                    } else if filteredUsers.isEmpty {
+                        Spacer()
+                        VStack(spacing: 12) {
+                            Image(systemName: "person.2.slash")
+                                .font(.system(size: 40))
+                                .foregroundColor(Color(hex: "5C3D2E").opacity(0.4))
+                            Text("No users to add")
+                                .font(.system(size: 18, weight: .medium, design: .rounded))
+                                .foregroundColor(Color(hex: "5C3D2E"))
+                            Text("All your connections are already members,\nor start a conversation first!")
+                                .font(.system(size: 14, design: .rounded))
+                                .foregroundColor(Color(hex: "5C3D2E").opacity(0.6))
+                                .multilineTextAlignment(.center)
+                        }
+                        .padding()
+                        Spacer()
+                    } else {
+                        List {
+                            ForEach(filteredUsers, id: \.userID) { user in
+                                if let userId = user.userID {
+                                    Button(action: {
+                                        if selectedMemberIds.contains(userId) {
+                                            selectedMemberIds.remove(userId)
+                                        } else {
+                                            selectedMemberIds.insert(userId)
+                                        }
+                                    }) {
+                                        HStack {
+                                            Circle()
+                                                .fill(Color(hex: "D4C4B0"))
+                                                .frame(width: 40, height: 40)
+                                                .overlay(
+                                                    Text("\(user.firstName?.prefix(1) ?? "")")
+                                                        .font(.headline)
+                                                        .foregroundColor(Color(hex: "5C3D2E"))
+                                                )
+                                            
+                                            Text("\(user.firstName ?? "") \(user.lastName ?? "")")
+                                                .font(.system(size: 16, design: .rounded))
+                                                .foregroundColor(Color(hex: "5C3D2E"))
+                                            
+                                            Spacer()
+                                            
+                                            Image(systemName: selectedMemberIds.contains(userId) ? "checkmark.circle.fill" : "circle")
+                                                .foregroundColor(selectedMemberIds.contains(userId) ? Color(hex: "8B9A7E") : Color(hex: "5C3D2E").opacity(0.3))
+                                                .font(.system(size: 22))
+                                        }
+                                    }
+                                    .listRowBackground(Color.clear)
+                                }
+                            }
+                        }
+                        .listStyle(PlainListStyle())
+                    }
+                }
+            }
+            .navigationTitle("Add Members")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
                         dismiss()
                     }
-                    .foregroundColor(Color(hex: "8B9A7E"))
-                    .disabled(channelName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .foregroundColor(Color(hex: "5C3D2E"))
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .foregroundColor(Color(hex: "5C3D2E"))
+                    .fontWeight(.semibold)
                 }
             }
         }

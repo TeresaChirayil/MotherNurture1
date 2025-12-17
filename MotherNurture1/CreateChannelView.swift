@@ -525,14 +525,13 @@ struct CreateChannelView: View {
     
     private func loadAvailableUsers() {
         guard !isLoadingUsers else { return }
+        guard let currentUserId = userDataManager.profile.userID else { return }
         isLoadingUsers = true
         
         Task {
             do {
-                let users = try await FirebaseService.shared.fetchAllUserProfiles(
-                    excludingUserID: userDataManager.profile.userID,
-                    limit: 100
-                )
+                // Only show users the current user has DM channels with (users they've chatted with)
+                let users = try await FirebaseService.shared.getUsersFromDMChannels(currentUserId: currentUserId)
                 await MainActor.run {
                     availableUsers = users
                     isLoadingUsers = false
@@ -591,8 +590,19 @@ struct MemberPickerView: View {
                         Spacer()
                     } else if filteredUsers.isEmpty {
                         Spacer()
-                        Text("No users found")
-                            .foregroundColor(Color(hex: "5C3D2E").opacity(0.6))
+                        VStack(spacing: 12) {
+                            Image(systemName: "person.2.slash")
+                                .font(.system(size: 40))
+                                .foregroundColor(Color(hex: "5C3D2E").opacity(0.4))
+                            Text("No connections yet")
+                                .font(.system(size: 18, weight: .medium, design: .rounded))
+                                .foregroundColor(Color(hex: "5C3D2E"))
+                            Text("You can only add users you've chatted with.\nStart a conversation first!")
+                                .font(.system(size: 14, design: .rounded))
+                                .foregroundColor(Color(hex: "5C3D2E").opacity(0.6))
+                                .multilineTextAlignment(.center)
+                        }
+                        .padding()
                         Spacer()
                     } else {
                         List {

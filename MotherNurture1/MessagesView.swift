@@ -25,6 +25,13 @@ struct MessagesView: View {
     @State private var selectedUserProfile: UserProfile? = nil
     @State private var showUserProfile = false
     @State private var userProfilesCache: [String: UserProfile] = [:]
+    @State private var showEditChannel = false
+    @State private var editableChannel: Channel
+    
+    init(channel: Channel) {
+        self.channel = channel
+        self._editableChannel = State(initialValue: channel)
+    }
     
     private var canBlockOrReport: Bool {
         channel.isDirectMessage // Only allow block/report for direct messages
@@ -53,10 +60,49 @@ struct MessagesView: View {
                             .foregroundColor(Color(hex: "5C3D2E"))
                             .font(.system(size: 20, weight: .medium))
                     }
-                    Text(channel.displayName(forUserId: currentUserID))
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
-                        .foregroundColor(Color(hex: "5C3D2E"))
+                    
+                    // Make header tappable in DMs to view profile
+                    if channel.isDirectMessage {
+                        Button(action: {
+                            loadOtherUserProfile()
+                        }) {
+                            HStack(spacing: 8) {
+                                // Show profile pic of other user
+                                if let otherUserId = channel.memberIds.first(where: { $0 != currentUserID }),
+                                   let cachedProfile = userProfilesCache[otherUserId] {
+                                    ProfilePicView(profile: cachedProfile, name: channel.displayName(forUserId: currentUserID), size: 32)
+                                } else {
+                                    ProfilePicView(profile: nil, name: channel.displayName(forUserId: currentUserID), size: 32)
+                                }
+                                
+                                Text(channel.displayName(forUserId: currentUserID))
+                                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                                    .foregroundColor(Color(hex: "5C3D2E"))
+                                
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(Color(hex: "5C3D2E").opacity(0.6))
+                            }
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    } else {
+                        Text(channel.displayName(forUserId: currentUserID))
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                            .foregroundColor(Color(hex: "5C3D2E"))
+                    }
+                    
                     Spacer()
+                    
+                    // Edit button for group channels (not DMs)
+                    if !channel.isDirectMessage {
+                        Button(action: {
+                            showEditChannel = true
+                        }) {
+                            Image(systemName: "pencil")
+                                .foregroundColor(Color(hex: "5C3D2E"))
+                                .font(.system(size: 18, weight: .medium))
+                        }
+                    }
                     
                     Menu {
                         if canBlockOrReport {
@@ -258,10 +304,40 @@ struct MessagesView: View {
                     .environmentObject(userDataManager)
             }
         }
+        .sheet(isPresented: $showEditChannel) {
+            EditChannelView(
+                channel: editableChannel,
+                isPresented: $showEditChannel,
+                onSave: { updatedChannel in
+                    editableChannel = updatedChannel
+                    // Update channel in Firestore
+                    Task {
+                        do {
+                            try await FirebaseService.shared.updateChannel(updatedChannel)
+                        } catch {
+                            print("Error updating channel: \(error)")
+                        }
+                    }
+                }
+            )
+            .environmentObject(userDataManager)
+        }
         .onAppear {
             loadMessages()
             setupMessageListener()
             markMessagesAsRead()
+            // Pre-load other user's profile for DM header
+            if channel.isDirectMessage {
+                if let otherUserId = channel.memberIds.first(where: { $0 != currentUserID }) {
+                    Task {
+                        if let profile = try? await FirebaseService.shared.getUserProfile(userID: otherUserId) {
+                            await MainActor.run {
+                                userProfilesCache[otherUserId] = profile
+                            }
+                        }
+                    }
+                }
+            }
         }
         .onDisappear {
             messageListener?.remove()
@@ -504,6 +580,12 @@ struct MessagesView: View {
                 }
             }
         }
+    }
+    
+    private func loadOtherUserProfile() {
+        // For DM channels, find the other user and show their profile
+        guard let otherUserId = channel.memberIds.first(where: { $0 != currentUserID }) else { return }
+        loadAndShowProfile(userId: otherUserId)
     }
 }
 
