@@ -346,7 +346,15 @@ class FirebaseService {
                 try await setChannelClearedAt(userId: userID, channelId: welcomeChannelId, timestamp: now)
                 print("✅ Added user \(userID) to welcome channel")
             } else {
-                print("✅ User \(userID) already in welcome channel")
+                // If this user was previously auto-added (e.g. anonymous auth) but never had a clearedAt set,
+                // they would see the entire historical backlog. Set it once if missing.
+                let existingClearedAt = try await getChannelClearedAt(userId: userID, channelId: welcomeChannelId)
+                if existingClearedAt == nil {
+                    try await setChannelClearedAt(userId: userID, channelId: welcomeChannelId, timestamp: now)
+                    print("✅ Set welcome channel clearedAt for existing member \(userID)")
+                } else {
+                    print("✅ User \(userID) already in welcome channel")
+                }
             }
         }
     }

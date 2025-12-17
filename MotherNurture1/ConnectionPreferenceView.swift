@@ -21,94 +21,74 @@ struct ConnectionPreferenceView: View {
     
     var body: some View {
         ZStack {
-                // Background color (beige to match other screens)
-                Color(hex: "F8F5EE")
-                    .ignoresSafeArea()
-                
-                VStack(spacing: 0) {
-                    Spacer()
-                    
-                    // Main Content
-                    VStack(alignment: .leading, spacing: 30) {
-                        // Question
-                        Text("Would you like to start with a 1-on-1 buddy or a small parent circle?")
-                            .font(.system(size: 32, weight: .bold, design: .rounded))
-                            .foregroundColor(Color(hex: "5C3D2E"))
-                            .multilineTextAlignment(.center)
-                            .frame(maxWidth: .infinity)
-                            .padding(.horizontal, 40)
-                        
-                        // Options
-                        VStack(spacing: 16) {
-                            ForEach(ConnectionType.allCases, id: \.self) { option in
-                                Button(action: {
-                                    selectedOption = option
-                                }) {
-                                    Text(option.rawValue)
-                                        .font(.system(size: 18, weight: .medium, design: .rounded))
-                                        .foregroundColor(selectedOption == option ? .white : Color(hex: "5C3D2E"))
-                                        .frame(maxWidth: .infinity)
-                                        .frame(height: 56)
-                                        .background(selectedOption == option ? Color(hex: "8B9A7E") : Color(hex: "D4C4B0"))
-                                        .cornerRadius(12)
+            // Background color (beige to match other screens)
+            Color(hex: "F8F5EE")
+                .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                OnboardingCenteredScrollView {
+                    VStack(spacing: 16) {
+                        OnboardingCard {
+                            VStack(alignment: .leading, spacing: 14) {
+                                Text("Step 6")
+                                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                    .foregroundColor(Color(hex: "5C3D2E").opacity(0.7))
+
+                                Text("Would you like to start with a 1-on-1 buddy or a small parent circle?")
+                                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                                    .foregroundColor(Color(hex: "5C3D2E"))
+
+                                VStack(spacing: 12) {
+                                    ForEach(ConnectionType.allCases, id: \.self) { option in
+                                        OnboardingOptionButton(
+                                            title: option.rawValue,
+                                            isSelected: selectedOption == option,
+                                            action: { selectedOption = option }
+                                        )
+                                    }
                                 }
-                                .buttonStyle(PlainButtonStyle())
+                                .padding(.top, 2)
                             }
                         }
-                        .padding(.horizontal, 40)
                     }
-                    .padding(.top, 60)
-                    
-                    Spacer()
-                    
-                    // Bottom Navigation
-                    HStack {
-                        // Previous Button
-                        Button(action: {
-                            dismiss()
-                        }) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "chevron.left")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(Color(hex: "5C3D2E"))
-                                
-                                Text("Previous")
-                                    .font(.system(size: 16, weight: .medium, design: .rounded))
-                                    .foregroundColor(Color(hex: "5C3D2E"))
-                            }
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        
-                        Spacer()
-                        
-                        // Next Button
-                        Button(action: {
-                            // Save connection preference
-                            userDataManager.profile.connectionPreference = selectedOption?.rawValue
-                            
-                            navigateToSpecialNeedsPreference = true
-                        }) {
-                            HStack(spacing: 4) {
-                                Text("Next")
-                                    .font(.system(size: 16, weight: .medium, design: .rounded))
-                                    .foregroundColor(Color(hex: "5C3D2E"))
-                                
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(Color(hex: "5C3D2E"))
-                            }
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    }
-                    .padding(.horizontal, 40)
-                    .padding(.bottom, 40)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 4)
+                    .padding(.bottom, 20)
                 }
-                        .navigationDestination(isPresented: $navigateToSpecialNeedsPreference) {
-                            SpecialNeedsPreferenceView()
-                                .environmentObject(userDataManager)
+
+                HStack(spacing: 12) {
+                    Button(action: {
+                        dismiss()
+                    }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "chevron.left")
+                            Text("Previous")
                         }
+                    }
+                    .buttonStyle(OnboardingSecondaryButtonStyle())
+
+                    Button(action: {
+                        // Save connection preference
+                        userDataManager.profile.connectionPreference = selectedOption?.rawValue
+
+                        navigateToSpecialNeedsPreference = true
+                    }) {
+                        HStack(spacing: 6) {
+                            Text("Next")
+                            Image(systemName: "chevron.right")
+                        }
+                    }
+                    .buttonStyle(OnboardingPrimaryButtonStyle())
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 28)
             }
-            .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(isPresented: $navigateToSpecialNeedsPreference) {
+                SpecialNeedsPreferenceView()
+                    .environmentObject(userDataManager)
+            }
+        }
+        .toolbar(.hidden, for: .navigationBar)
     }
 }
 

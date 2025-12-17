@@ -261,55 +261,57 @@ struct CardView: View {
 
                 // Removed Divider() to avoid stealing vertical space
 
-                // Content area (non-scrollable)
-                VStack(alignment: .leading, spacing: contentSpacing) {
-                    // Groups first
-                    Group {
-                        FlowRows(spacing: chipSpacing) {
-                            ForEach(limitedGroups(profile.groups), id: \.self) { group in
-                                Button {
-                                    onGroupTapped(group)
-                                } label: {
-                                    Text(group)
-                                        .font(.caption)
-                                        .fontWeight(.bold)
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 3)
-                                        .background(Color.connectGreen)
-                                        .cornerRadius(10)
+                // Content area (scrollable to avoid clipping on smaller screens)
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: contentSpacing) {
+                        // Groups first
+                        Group {
+                            FlowRows(spacing: chipSpacing) {
+                                ForEach(limitedGroups(profile.groups), id: \.self) { group in
+                                    Button {
+                                        onGroupTapped(group)
+                                    } label: {
+                                        Text(group)
+                                            .font(.caption)
+                                            .fontWeight(.bold)
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 3)
+                                            .background(Color.connectGreen)
+                                            .cornerRadius(10)
+                                    }
+                                    .buttonStyle(.plain)
                                 }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        .padding(.top, 4)
-                        .padding(.bottom, 6) // increased for consistent gap to bio
-                        .background(Color.white)
-                    }
-                    
-                    if isTop {
-                        // Bio (slightly more breathing room)
-                        Text(profile.bio)
-                            .font(.body)
-                            .foregroundColor(.primaryText)
-                            .lineLimit(maxBioLines)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                showFullBio = true
                             }
                             .padding(.top, 4)
-                            .padding(.bottom, 4)
+                            .padding(.bottom, 6) // increased for consistent gap to bio
+                            .background(Color.white)
+                        }
                         
-                        // Tags: show up to maxTagRows, then add "+N more"
-                        ExpandableTagsView(tags: profile.tags, chipSpacing: chipSpacing, maxRows: maxTagRows)
-                            .padding(.top, 6) // gap from bio to tags
+                        if isTop {
+                            // Bio (slightly more breathing room)
+                            Text(profile.bio)
+                                .font(.body)
+                                .foregroundColor(.primaryText)
+                                .lineLimit(maxBioLines)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    showFullBio = true
+                                }
+                                .padding(.top, 4)
+                                .padding(.bottom, 4)
+                            
+                            // Tags: show up to maxTagRows, then add "+N more"
+                            ExpandableTagsView(tags: profile.tags, chipSpacing: chipSpacing, maxRows: maxTagRows)
+                                .padding(.top, 6) // gap from bio to tags
+                        }
                     }
+                    .padding(.horizontal, 12)
+                    .padding(.top, 8)
+                    .padding(.bottom, 16)
                 }
-                .padding(.horizontal, 12)
-                .padding(.top, 8)
-                .padding(.bottom, 4)
-                .frame(height: contentHeight) // explicit content height frame added
+                .frame(height: contentHeight)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color.white)
             }

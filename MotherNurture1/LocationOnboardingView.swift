@@ -11,105 +11,94 @@ struct LocationOnboardingView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var userDataManager: UserDataManager
     @State private var zipcode: String = ""
-    @State private var town: String = ""
+    @State private var city: String = ""
     @State private var navigateToParentingStage = false
     
     var body: some View {
         ZStack {
-                // Background color (beige to match other screens)
-                Color(hex: "F8F5EE")
-                    .ignoresSafeArea()
-                
-                VStack(spacing: 0) {
-                Spacer()
-                
-                // Main Content
-                VStack(alignment: .leading, spacing: 30) {
-                    // Question
-                    Text("To get started,\nWhere are you located?")
-                        .font(.system(size: 32, weight: .bold, design: .rounded))
-                        .foregroundColor(Color(hex: "5C3D2E"))
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: .infinity)
-                    
-                    // Input Fields
-                    VStack(alignment: .leading, spacing: 20) {
-                        // Zipcode Field
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Zipcode:")
-                                .font(.system(size: 16, weight: .medium, design: .rounded))
-                                .foregroundColor(Color(hex: "5C3D2E"))
-                            
-                            TextField("Enter zipcode", text: $zipcode)
-                                .textFieldStyle(LocationTextFieldStyle())
-                                .keyboardType(.numberPad)
-                        }
-                        
-                        // Town Field
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Town:")
-                                .font(.system(size: 16, weight: .medium, design: .rounded))
-                                .foregroundColor(Color(hex: "5C3D2E"))
-                            
-                            TextField("Enter town", text: $town)
-                                .textFieldStyle(LocationTextFieldStyle())
+            // Background color (beige to match other screens)
+            Color(hex: "F8F5EE")
+                .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                OnboardingCenteredScrollView {
+                    VStack(spacing: 16) {
+                        OnboardingCard {
+                            VStack(alignment: .leading, spacing: 14) {
+                                Text("To get started")
+                                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                    .foregroundColor(Color(hex: "5C3D2E").opacity(0.7))
+
+                                Text("Where are you located?")
+                                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                                    .foregroundColor(Color(hex: "5C3D2E"))
+                                    .multilineTextAlignment(.leading)
+
+                                VStack(alignment: .leading, spacing: 12) {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text("Zipcode")
+                                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                            .foregroundColor(Color(hex: "5C3D2E"))
+
+                                        TextField("Enter zipcode", text: $zipcode)
+                                            .textFieldStyle(OnboardingTextFieldStyle())
+                                            .keyboardType(.numberPad)
+                                    }
+
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text("City")
+                                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                            .foregroundColor(Color(hex: "5C3D2E"))
+
+                                        TextField("Enter city", text: $city)
+                                            .textFieldStyle(OnboardingTextFieldStyle())
+                                            .textInputAutocapitalization(.words)
+                                            .disableAutocorrection(true)
+                                    }
+                                }
+                                .padding(.top, 4)
+                            }
                         }
                     }
-                    .padding(.horizontal, 40)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 4)
+                    .padding(.bottom, 20)
                 }
-                .padding(.top, 60)
-                
-                Spacer()
-                
-                // Bottom Navigation
-                HStack {
-                    // Previous Button
+
+                HStack(spacing: 12) {
                     Button(action: {
                         dismiss()
                     }) {
-                        HStack(spacing: 4) {
+                        HStack(spacing: 6) {
                             Image(systemName: "chevron.left")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(Color(hex: "5C3D2E"))
-                            
                             Text("Previous")
-                                .font(.system(size: 16, weight: .medium, design: .rounded))
-                                .foregroundColor(Color(hex: "5C3D2E"))
                         }
                     }
-                    .buttonStyle(PlainButtonStyle())
-                    
-                    Spacer()
-                    
-                    // Next Button
+                    .buttonStyle(OnboardingSecondaryButtonStyle())
+
                     Button(action: {
                         // Save location data
                         userDataManager.profile.zipcode = zipcode.isEmpty ? nil : zipcode
-                        userDataManager.profile.town = town.isEmpty ? nil : town
-                        
+                        userDataManager.profile.town = city.isEmpty ? nil : city
+
                         navigateToParentingStage = true
                     }) {
-                        HStack(spacing: 4) {
+                        HStack(spacing: 6) {
                             Text("Next")
-                                .font(.system(size: 16, weight: .medium, design: .rounded))
-                                .foregroundColor(Color(hex: "5C3D2E"))
-                            
                             Image(systemName: "chevron.right")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(Color(hex: "5C3D2E"))
                         }
                     }
-                    .buttonStyle(PlainButtonStyle())
+                    .buttonStyle(OnboardingPrimaryButtonStyle())
                 }
-                .padding(.horizontal, 40)
-                .padding(.bottom, 40)
-                }
-                .navigationDestination(isPresented: $navigateToParentingStage) {
-                    ParentingStageView()
-                        .environmentObject(userDataManager)
-                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 28)
             }
-            .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(isPresented: $navigateToParentingStage) {
+                ParentingStageView()
+                    .environmentObject(userDataManager)
+            }
+        }
+        .toolbar(.hidden, for: .navigationBar)
     }
 }
 

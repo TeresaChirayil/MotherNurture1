@@ -9,8 +9,11 @@ import SwiftUI
 import MapKit
 import CoreLocation
 import Combine
+import FirebaseFirestore
 
 struct MapView: View {
+    @EnvironmentObject var userDataManager: UserDataManager
+
     @State private var region = MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 41.9900, longitude: -87.7000), // Chicago 60659 area (West Ridge)
         span: MKCoordinateSpan(latitudeDelta: 0.08, longitudeDelta: 0.08)
@@ -22,8 +25,30 @@ struct MapView: View {
     @State private var showFilters = false
     @State private var showListSheet = false
     @State private var showFavoritesOnly = false
-    @State private var favoriteIDs: Set<UUID> = []
+    @State private var favoriteIDs: Set<String> = []
     @StateObject private var locationManager = LocationManager()
+
+    @State private var communityLocations: [LocationPin] = []
+    @State private var isLoadingCommunityLocations = false
+    @State private var showAddPlaceSheet = false
+
+    enum NearbyRadius: Double, CaseIterable {
+        case one = 1
+        case three = 3
+        case five = 5
+        case ten = 10
+
+        var title: String {
+            switch self {
+            case .one: return "1 mi"
+            case .three: return "3 mi"
+            case .five: return "5 mi"
+            case .ten: return "10 mi"
+            }
+        }
+    }
+
+    @State private var nearbyRadius: NearbyRadius = .five
     
     // Real family-friendly locations in the 60659 area (West Ridge, Chicago)
     let allLocations: [LocationPin] = [
@@ -271,8 +296,8 @@ struct MapView: View {
     
     // Computed property for filtered locations
     var filteredLocations: [LocationPin] {
-        var locations = allLocations
-        
+        var locations = allLocations + communityLocations
+
         // Filter by search text
         if !searchText.isEmpty {
             locations = locations.filter { location in
@@ -281,24 +306,27 @@ struct MapView: View {
                 location.address.localizedCaseInsensitiveContains(searchText)
             }
         }
-        
+
         // Filter by category
         if let category = selectedCategory {
             locations = locations.filter { $0.category == category }
         }
-        
+
         // Filter by favorites
         if showFavoritesOnly {
             locations = locations.filter { favoriteIDs.contains($0.id) }
         }
-        
+
+        // Filter by radius (include nearby neighborhoods)
+        locations = locations.filter { isWithinRadius($0) }
+
         return locations
     }
     
     // Slight deterministic offset to reduce exact overlap for very close points
     private func jitteredCoordinate(for pin: LocationPin) -> CLLocationCoordinate2D {
-        // Use UUID hash to generate a tiny offset
-        let hash = pin.id.uuidString.hashValue
+        // Use id hash to generate a tiny offset
+        let hash = pin.id.hashValue
         // Convert to small deltas (~5-10 meters depending on latitude)
         let latDelta = (Double((hash & 0xFF)) - 128.0) / 1_000_000.0
         let lonDelta = (Double(((hash >> 8) & 0xFF)) - 128.0) / 1_000_000.0
@@ -429,6 +457,24 @@ struct MapView: View {
                         
                         // Map Controls
                         VStack(spacing: 10) {
+                            // Add Place Button
+                            Button {
+                                showAddPlaceSheet = true
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "plus")
+                                        .font(.system(size: 16, weight: .semibold))
+                                    Text("Add")
+                                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                }
+                                .foregroundColor(.white)
+                                .frame(height: 36)
+                                .padding(.horizontal, 12)
+                                .background(Color(hex: "8B9A7E"))
+                                .cornerRadius(10)
+                                .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
+                            }
+
                             // Show List Button
                             Button {
                                 showListSheet = true
@@ -512,6 +558,35 @@ struct MapView: View {
                                     .cornerRadius(10)
                                     .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
                             }
+
+                            // Nearby radius selector
+                            Menu {
+                                ForEach(NearbyRadius.allCases, id: \.self) { r in
+                                    Button {
+                                        nearbyRadius = r
+                                        adjustRegionSpan(for: r)
+                                    } label: {
+                                        if nearbyRadius == r {
+                                            Label(r.title, systemImage: "checkmark")
+                                        } else {
+                                            Text(r.title)
+                                        }
+                                    }
+                                }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "scope")
+                                        .font(.system(size: 16, weight: .semibold))
+                                    Text(nearbyRadius.title)
+                                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                }
+                                .foregroundColor(Color(hex: "5C3D2E"))
+                                .frame(height: 36)
+                                .padding(.horizontal, 12)
+                                .background(Color.white)
+                                .cornerRadius(10)
+                                .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
+                            }
                         }
                         .padding(.trailing, 16)
                         .padding(.bottom, 100)
@@ -536,12 +611,21 @@ struct MapView: View {
             .onAppear {
                 // Request location permission
                 locationManager.requestLocation()
+
+                loadFavorites()
+
+                Task {
+                    await loadCommunityLocations()
+                }
                 
                 // Ensure the map is centered on Chicago 60659
                 region = MKCoordinateRegion(
                     center: CLLocationCoordinate2D(latitude: 41.9900, longitude: -87.7000),
                     span: MKCoordinateSpan(latitudeDelta: 0.08, longitudeDelta: 0.08)
                 )
+            }
+            .onChange(of: favoriteIDs) { _ in
+                saveFavorites()
             }
             .sheet(isPresented: $showLocationDetail) {
                 if let location = selectedLocation {
@@ -560,14 +644,311 @@ struct MapView: View {
                     }
                 )
             }
+            .sheet(isPresented: $showAddPlaceSheet) {
+                AddPlaceSheet(
+                    defaultCoordinate: region.center,
+                    userCoordinate: locationManager.location?.coordinate,
+                    defaultRadius: nearbyRadius,
+                    onSave: { draft in
+                        Task {
+                            await addCommunityLocation(draft: draft)
+                        }
+                    }
+                )
+            }
+        }
+    }
+
+    private func isWithinRadius(_ pin: LocationPin) -> Bool {
+        let center = locationManager.location?.coordinate ?? region.center
+        let pinLoc = CLLocation(latitude: pin.coordinate.latitude, longitude: pin.coordinate.longitude)
+        let centerLoc = CLLocation(latitude: center.latitude, longitude: center.longitude)
+        let miles = centerLoc.distance(from: pinLoc) / 1609.344
+        return miles <= nearbyRadius.rawValue
+    }
+
+    private func adjustRegionSpan(for radius: NearbyRadius) {
+        // Approximate degrees for miles (1 deg lat ~ 69 miles)
+        let latDelta = (radius.rawValue / 69.0) * 2.2
+        // Longitude delta adjusted for latitude
+        let lat = region.center.latitude
+        let lonDelta = latDelta / max(0.2, cos(lat * .pi / 180.0))
+        withAnimation {
+            region.span = MKCoordinateSpan(latitudeDelta: latDelta, longitudeDelta: lonDelta)
+        }
+    }
+
+    private func favoritesKey() -> String {
+        if let userId = userDataManager.profile.userID, !userId.isEmpty {
+            return "map_favorites_\(userId)"
+        }
+        return "map_favorites"
+    }
+
+    private func loadFavorites() {
+        let key = favoritesKey()
+        if let saved = UserDefaults.standard.array(forKey: key) as? [String] {
+            favoriteIDs = Set(saved)
+        }
+    }
+
+    private func saveFavorites() {
+        let key = favoritesKey()
+        UserDefaults.standard.set(Array(favoriteIDs), forKey: key)
+    }
+
+    private func loadCommunityLocations() async {
+        if isLoadingCommunityLocations { return }
+        isLoadingCommunityLocations = true
+        defer { isLoadingCommunityLocations = false }
+
+        let db = Firestore.firestore()
+        do {
+            var docsById: [String: [String: Any]] = [:]
+
+            let publicSnap = try await db.collection("mapLocations")
+                .whereField("isPublic", isEqualTo: true)
+                .getDocuments()
+            for doc in publicSnap.documents {
+                docsById[doc.documentID] = doc.data()
+            }
+
+            if let userId = userDataManager.profile.userID, !userId.isEmpty {
+                let mineSnap = try await db.collection("mapLocations")
+                    .whereField("createdBy", isEqualTo: userId)
+                    .getDocuments()
+                for doc in mineSnap.documents {
+                    docsById[doc.documentID] = doc.data()
+                }
+            }
+
+            let pins: [LocationPin] = docsById.compactMap { (docId, data) in
+                guard
+                    let name = data["name"] as? String,
+                    let categoryRaw = data["category"] as? String,
+                    let category = LocationPin.LocationCategory(rawValue: categoryRaw),
+                    let lat = data["lat"] as? Double,
+                    let lon = data["lon"] as? Double,
+                    let desc = data["description"] as? String,
+                    let address = data["address"] as? String
+                else {
+                    return nil
+                }
+
+                let phone = data["phone"] as? String
+                let hours = data["hours"] as? String
+
+                return LocationPin(
+                    id: docId,
+                    name: name,
+                    category: category,
+                    coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon),
+                    description: desc,
+                    address: address,
+                    phone: phone,
+                    hours: hours
+                )
+            }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+
+            await MainActor.run {
+                self.communityLocations = pins
+            }
+        } catch {
+            print("⚠️ Error loading map locations: \(error)")
+        }
+    }
+
+    private func addCommunityLocation(draft: AddPlaceDraft) async {
+        let db = Firestore.firestore()
+        let userId = userDataManager.profile.userID ?? ""
+
+        let data: [String: Any] = [
+            "name": draft.name,
+            "category": draft.category.rawValue,
+            "lat": draft.coordinate.latitude,
+            "lon": draft.coordinate.longitude,
+            "description": draft.description,
+            "address": draft.address,
+            "phone": draft.phone as Any,
+            "hours": draft.hours as Any,
+            "isPublic": draft.isPublic,
+            "createdBy": userId,
+            "createdAt": Timestamp(date: Date()),
+            "updatedAt": Timestamp(date: Date())
+        ]
+
+        do {
+            _ = try await db.collection("mapLocations").addDocument(data: data)
+            await loadCommunityLocations()
+        } catch {
+            print("⚠️ Error adding map location: \(error)")
         }
     }
     
 }
 
+struct AddPlaceDraft {
+    let name: String
+    let category: LocationPin.LocationCategory
+    let coordinate: CLLocationCoordinate2D
+    let description: String
+    let address: String
+    let phone: String?
+    let hours: String?
+    let isPublic: Bool
+}
+
+private struct AddPlaceSheet: View {
+    let defaultCoordinate: CLLocationCoordinate2D
+    let userCoordinate: CLLocationCoordinate2D?
+    let defaultRadius: MapView.NearbyRadius
+    let onSave: (AddPlaceDraft) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var name: String = ""
+    @State private var category: LocationPin.LocationCategory = .park
+    @State private var description: String = ""
+    @State private var address: String = ""
+    @State private var phone: String = ""
+    @State private var hours: String = ""
+    @State private var isPublic: Bool = true
+    @State private var useUserLocation: Bool = false
+
+    private var coordinate: CLLocationCoordinate2D {
+        if useUserLocation, let userCoordinate {
+            return userCoordinate
+        }
+        return defaultCoordinate
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Name")
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .foregroundColor(Color(hex: "5C3D2E"))
+                        TextField("e.g. Great playground", text: $name)
+                            .textFieldStyle(OnboardingTextFieldStyle())
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Category")
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .foregroundColor(Color(hex: "5C3D2E"))
+                        Picker("Category", selection: $category) {
+                            ForEach(LocationPin.LocationCategory.allCases, id: \.self) { c in
+                                Text(c.displayName).tag(c)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .tint(Color(hex: "5C3D2E"))
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Address")
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .foregroundColor(Color(hex: "5C3D2E"))
+                        TextField("Optional", text: $address)
+                            .textFieldStyle(OnboardingTextFieldStyle())
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Notes")
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .foregroundColor(Color(hex: "5C3D2E"))
+                        TextField("Why you recommend it", text: $description, axis: .vertical)
+                            .textFieldStyle(OnboardingTextFieldStyle())
+                            .lineLimit(3...8)
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Phone")
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .foregroundColor(Color(hex: "5C3D2E"))
+                        TextField("Optional", text: $phone)
+                            .textFieldStyle(OnboardingTextFieldStyle())
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Hours")
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .foregroundColor(Color(hex: "5C3D2E"))
+                        TextField("Optional", text: $hours)
+                            .textFieldStyle(OnboardingTextFieldStyle())
+                    }
+
+                    Toggle(isOn: $isPublic) {
+                        Text("Share with everyone")
+                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .foregroundColor(Color(hex: "5C3D2E"))
+                    }
+                    .tint(Color(hex: "8B9A7E"))
+
+                    if userCoordinate != nil {
+                        Toggle(isOn: $useUserLocation) {
+                            Text("Pin to my current location")
+                                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                .foregroundColor(Color(hex: "5C3D2E"))
+                        }
+                        .tint(Color(hex: "8B9A7E"))
+                    }
+
+                    Text("Pinned near: \(String(format: "%.4f", coordinate.latitude)), \(String(format: "%.4f", coordinate.longitude))")
+                        .font(.system(size: 12, design: .rounded))
+                        .foregroundColor(Color(hex: "5C3D2E").opacity(0.65))
+
+                    Button {
+                        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+                        let trimmedDesc = description.trimmingCharacters(in: .whitespacesAndNewlines)
+                        let trimmedAddr = address.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard !trimmedName.isEmpty else { return }
+
+                        onSave(AddPlaceDraft(
+                            name: trimmedName,
+                            category: category,
+                            coordinate: coordinate,
+                            description: trimmedDesc.isEmpty ? "Recommended by the community." : trimmedDesc,
+                            address: trimmedAddr.isEmpty ? "" : trimmedAddr,
+                            phone: phone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : phone,
+                            hours: hours.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : hours,
+                            isPublic: isPublic
+                        ))
+                        dismiss()
+                    } label: {
+                        Text("Add Place")
+                    }
+                    .buttonStyle(OnboardingPrimaryButtonStyle())
+                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .padding(.top, 8)
+                }
+                .padding(20)
+            }
+            .background(Color(hex: "F8F5EE"))
+            .navigationTitle("Add a Place")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .foregroundColor(Color(hex: "5C3D2E"))
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Text(defaultRadius.title)
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .foregroundColor(Color(hex: "5C3D2E").opacity(0.6))
+                }
+            }
+        }
+    }
+}
+
 // MARK: - LocationPin
 struct LocationPin: Identifiable {
-    let id = UUID()
+    let id: String
     let name: String
     let category: LocationCategory
     let coordinate: CLLocationCoordinate2D
@@ -575,6 +956,34 @@ struct LocationPin: Identifiable {
     let address: String
     let phone: String?
     let hours: String?
+
+    init(
+        id: String? = nil,
+        name: String,
+        category: LocationCategory,
+        coordinate: CLLocationCoordinate2D,
+        description: String,
+        address: String,
+        phone: String?,
+        hours: String?
+    ) {
+        let safeName = name.lowercased()
+            .replacingOccurrences(of: "'", with: "")
+            .replacingOccurrences(of: " ", with: "-")
+        let safeAddress = address.lowercased()
+            .replacingOccurrences(of: "'", with: "")
+            .replacingOccurrences(of: " ", with: "-")
+            .replacingOccurrences(of: ",", with: "")
+            .replacingOccurrences(of: ".", with: "")
+        self.id = id ?? "builtin_\(safeName)_\(safeAddress)"
+        self.name = name
+        self.category = category
+        self.coordinate = coordinate
+        self.description = description
+        self.address = address
+        self.phone = phone
+        self.hours = hours
+    }
     
     enum LocationCategory: String, CaseIterable {
         case park
@@ -699,7 +1108,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
 // MARK: - Location Detail Sheet
 struct LocationDetailSheet: View {
     let location: LocationPin
-    @Binding var favoriteIDs: Set<UUID>
+    @Binding var favoriteIDs: Set<String>
     @Environment(\.dismiss) var dismiss
     @State private var showShareSheet = false
     
@@ -917,7 +1326,7 @@ struct ShareSheet: UIViewControllerRepresentable {
 // MARK: - List Sheet for crowded areas
 private struct LocationListSheet: View {
     let locations: [LocationPin]
-    @Binding var favoriteIDs: Set<UUID>
+    @Binding var favoriteIDs: Set<String>
     var onSelect: (LocationPin) -> Void
     
     @Environment(\.dismiss) private var dismiss

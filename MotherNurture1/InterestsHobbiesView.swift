@@ -28,166 +28,163 @@ struct InterestsHobbiesView: View {
     
     var body: some View {
         ZStack {
-                // Background color (beige to match other screens)
-                Color(hex: "F8F5EE")
-                    .ignoresSafeArea()
-                
-                VStack(spacing: 0) {
-                    ScrollView {
-                        // Main Content
-                        VStack(alignment: .leading, spacing: 20) {
-                            // Question
-                            Text("What would you enjoy doing in your free time?")
-                                .font(.system(size: 32, weight: .bold, design: .rounded))
-                                .foregroundColor(Color(hex: "5C3D2E"))
-                                .multilineTextAlignment(.center)
-                                .frame(maxWidth: .infinity)
-                                .padding(.horizontal, 40)
-                            
-                            // Instruction
-                            Text("More than one option is possible.")
-                                .font(.system(size: 16, design: .rounded))
-                                .foregroundColor(Color(hex: "5C3D2E").opacity(0.7))
-                                .frame(maxWidth: .infinity)
-                                .padding(.horizontal, 40)
-                            
-                            // Interest Options
-                            VStack(spacing: 16) {
-                                ForEach(interests, id: \.self) { interest in
-                                    Button(action: {
+            // Background color (beige to match other screens)
+            Color(hex: "F8F5EE")
+                .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                OnboardingCenteredScrollView {
+                    VStack(spacing: 16) {
+                        OnboardingCard {
+                            VStack(alignment: .leading, spacing: 14) {
+                                Text("Step 5")
+                                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                    .foregroundColor(Color(hex: "5C3D2E").opacity(0.7))
+
+                                Text("What would you enjoy doing in your free time?")
+                                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                                    .foregroundColor(Color(hex: "5C3D2E"))
+
+                                Text("More than one option is possible.")
+                                    .font(.system(size: 16, design: .rounded))
+                                    .foregroundColor(Color(hex: "5C3D2E").opacity(0.75))
+
+                                VStack(spacing: 12) {
+                                    ForEach(interests, id: \.self) { interest in
                                         if interest == "Anything!" {
-                                            withAnimation { showingCustomInterestField.toggle() }
-                                            return
-                                        }
-                                        if selectedInterests.contains(interest) {
-                                            selectedInterests.remove(interest)
-                                        } else {
-                                            selectedInterests.insert(interest)
-                                        }
-                                    }) {
-                                        Text(interest)
-                                            .font(.system(size: 18, weight: .medium, design: .rounded))
-                                            .foregroundColor(selectedInterests.contains(interest) ? .white : Color(hex: "5C3D2E"))
-                                            .frame(maxWidth: .infinity)
-                                            .frame(height: 56)
-                                            .background(selectedInterests.contains(interest) ? Color(hex: "8B9A7E") : Color(hex: "D4C4B0"))
-                                            .cornerRadius(12)
-                                    }
-                                    .buttonStyle(PlainButtonStyle())
-                                }
-                                
-                                if showingCustomInterestField {
-                                    VStack(alignment: .leading, spacing: 12) {
-                                        HStack(spacing: 8) {
-                                            TextField("Type your interest...", text: $customInterestText)
-                                                .padding(.horizontal, 12)
-                                                .frame(height: 56)
-                                                .background(Color(hex: "D4C4B0"))
-                                                .cornerRadius(12)
-                                                .foregroundColor(Color(hex: "5C3D2E"))
-                                                .font(.system(size: 16, design: .rounded))
-                                                .textInputAutocapitalization(.words)
-                                                .disableAutocorrection(true)
-                                            
-                                            Button(action: {
-                                                let trimmed = customInterestText.trimmingCharacters(in: .whitespacesAndNewlines)
-                                                guard !trimmed.isEmpty else { return }
-                                                selectedInterests.insert(trimmed)
-                                                customInterestText = ""
-                                            }) {
-                                                Text("Add")
-                                                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-                                                    .foregroundColor(.white)
-                                                    .padding(.horizontal, 14)
-                                                    .padding(.vertical, 10)
-                                                    .background(Color(hex: "8B9A7E"))
-                                                    .cornerRadius(8)
-                                            }
-                                            .buttonStyle(.plain)
-                                        }
-                                        
-                                        // Custom interests displayed like other options, with a removable X
-                                        VStack(spacing: 10) {
-                                            ForEach(Array(selectedInterests).filter { !interests.contains($0) }, id: \.self) { custom in
-                                                HStack {
-                                                    Text(custom)
-                                                        .font(.system(size: 18, weight: .medium, design: .rounded))
-                                                        .foregroundColor(Color(hex: "5C3D2E"))
-                                                    Spacer()
-                                                    Button {
-                                                        selectedInterests.remove(custom)
-                                                    } label: {
-                                                        Image(systemName: "xmark.circle.fill")
-                                                            .foregroundColor(Color(hex: "5C3D2E"))
-                                                            .font(.system(size: 20, weight: .bold))
+                                            VStack(spacing: 10) {
+                                                OnboardingOptionButton(
+                                                    title: interest,
+                                                    isSelected: showingCustomInterestField,
+                                                    action: {
+                                                        withAnimation(.easeInOut(duration: 0.2)) {
+                                                            showingCustomInterestField.toggle()
+                                                        }
                                                     }
-                                                    .buttonStyle(.plain)
+                                                )
+
+                                                if showingCustomInterestField {
+                                                    VStack(alignment: .leading, spacing: 12) {
+                                                        HStack(spacing: 10) {
+                                                            TextField("Type your interest...", text: $customInterestText)
+                                                                .padding(.horizontal, 14)
+                                                                .padding(.vertical, 12)
+                                                                .background(Color(hex: "8B9A7E"))
+                                                                .overlay(
+                                                                    RoundedRectangle(cornerRadius: 12)
+                                                                        .stroke(Color.white.opacity(0.20), lineWidth: 1)
+                                                                )
+                                                                .cornerRadius(12)
+                                                                .foregroundColor(.white)
+                                                                .tint(.white)
+                                                                .font(.system(size: 16, design: .rounded))
+                                                                .textInputAutocapitalization(.words)
+                                                                .disableAutocorrection(true)
+
+                                                            Button(action: {
+                                                                let trimmed = customInterestText.trimmingCharacters(in: .whitespacesAndNewlines)
+                                                                guard !trimmed.isEmpty else { return }
+                                                                selectedInterests.insert(trimmed)
+                                                                customInterestText = ""
+                                                            }) {
+                                                                Text("Add")
+                                                                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                                                                    .foregroundColor(.white)
+                                                                    .padding(.horizontal, 14)
+                                                                    .padding(.vertical, 12)
+                                                                    .background(Color(hex: "5C3D2E"))
+                                                                    .cornerRadius(12)
+                                                            }
+                                                            .buttonStyle(.plain)
+                                                        }
+
+                                                        VStack(spacing: 10) {
+                                                            ForEach(Array(selectedInterests).filter { !interests.contains($0) }, id: \.self) { custom in
+                                                                HStack(spacing: 10) {
+                                                                    Text(custom)
+                                                                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                                                        .foregroundColor(.white)
+                                                                    Spacer()
+                                                                    Button {
+                                                                        selectedInterests.remove(custom)
+                                                                    } label: {
+                                                                        Image(systemName: "xmark.circle.fill")
+                                                                            .foregroundColor(.white.opacity(0.85))
+                                                                            .font(.system(size: 20, weight: .bold))
+                                                                    }
+                                                                    .buttonStyle(.plain)
+                                                                }
+                                                                .padding(.horizontal, 16)
+                                                                .padding(.vertical, 14)
+                                                                .frame(maxWidth: .infinity)
+                                                                .background(Color(hex: "8B9A7E"))
+                                                                .overlay(
+                                                                    RoundedRectangle(cornerRadius: 12)
+                                                                        .stroke(Color.white.opacity(0.20), lineWidth: 1)
+                                                                )
+                                                                .cornerRadius(12)
+                                                            }
+                                                        }
+                                                    }
                                                 }
-                                                .padding(.horizontal, 16)
-                                                .frame(maxWidth: .infinity)
-                                                .frame(height: 56)
-                                                .background(Color(hex: "D4C4B0"))
-                                                .cornerRadius(12)
                                             }
+                                        } else {
+                                            OnboardingCheckRow(
+                                                title: interest,
+                                                isSelected: selectedInterests.contains(interest),
+                                                action: {
+                                                    if selectedInterests.contains(interest) {
+                                                        selectedInterests.remove(interest)
+                                                    } else {
+                                                        selectedInterests.insert(interest)
+                                                    }
+                                                }
+                                            )
                                         }
                                     }
-                                    .padding(.top, 4)
                                 }
+                                .padding(.top, 2)
                             }
-                            .padding(.horizontal, 40)
                         }
-                        .padding(.top, 20)
-                        .padding(.bottom, 40)
                     }
-                    
-                    // Bottom Navigation
-                    HStack {
-                        // Previous Button
-                        Button(action: {
-                            dismiss()
-                        }) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "chevron.left")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(Color(hex: "5C3D2E"))
-                                
-                                Text("Previous")
-                                    .font(.system(size: 16, weight: .medium, design: .rounded))
-                                    .foregroundColor(Color(hex: "5C3D2E"))
-                            }
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        
-                        Spacer()
-                        
-                        // Next Button
-                        Button(action: {
-                            // Save interests
-                            userDataManager.profile.interests = Array(selectedInterests)
-                            
-                            navigateToConnectionPreference = true
-                        }) {
-                            HStack(spacing: 4) {
-                                Text("Next")
-                                    .font(.system(size: 16, weight: .medium, design: .rounded))
-                                    .foregroundColor(Color(hex: "5C3D2E"))
-                                
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(Color(hex: "5C3D2E"))
-                            }
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    }
-                    .padding(.horizontal, 40)
-                    .padding(.bottom, 40)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 4)
+                    .padding(.bottom, 20)
                 }
-                        .navigationDestination(isPresented: $navigateToConnectionPreference) {
-                            ConnectionPreferenceView()
-                                .environmentObject(userDataManager)
+
+                HStack(spacing: 12) {
+                    Button(action: {
+                        dismiss()
+                    }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "chevron.left")
+                            Text("Previous")
                         }
+                    }
+                    .buttonStyle(OnboardingSecondaryButtonStyle())
+
+                    Button(action: {
+                        // Save interests
+                        userDataManager.profile.interests = Array(selectedInterests)
+
+                        navigateToConnectionPreference = true
+                    }) {
+                        HStack(spacing: 6) {
+                            Text("Next")
+                            Image(systemName: "chevron.right")
+                        }
+                    }
+                    .buttonStyle(OnboardingPrimaryButtonStyle())
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 28)
             }
-            .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(isPresented: $navigateToConnectionPreference) {
+                ConnectionPreferenceView()
+                    .environmentObject(userDataManager)
+            }
+        }
+        .toolbar(.hidden, for: .navigationBar)
     }
 }
 
