@@ -395,6 +395,9 @@ struct SignUpView: View {
                 userDataManager.profile.dateOfBirth = dateOfBirth
                 userDataManager.profile.email = trimmedEmail
                 
+                // Hash and store password
+                userDataManager.profile.passwordHash = UserProfile.hashPassword(password)
+                
                 // Ensure createdAt is set
                 if userDataManager.profile.createdAt == nil {
                     userDataManager.profile.createdAt = Timestamp(date: Date())
@@ -403,6 +406,7 @@ struct SignUpView: View {
                 print("   ✅ First Name: \(userDataManager.profile.firstName ?? "nil")")
                 print("   ✅ Last Name: \(userDataManager.profile.lastName ?? "nil")")
                 print("   ✅ Email: \(userDataManager.profile.email ?? "nil")")
+                print("   ✅ Password Hash: set")
                 print("   ✅ CreatedAt: \(userDataManager.profile.createdAt != nil ? "set" : "nil")")
                 
                 // Save the profile to Firebase (this will authenticate anonymously if needed)

@@ -128,6 +128,11 @@ struct ContentView: View {
             return
         }
         
+        guard !password.isEmpty else {
+            loginError = "Please enter your password."
+            return
+        }
+        
         // Normalize email (trim and lowercase)
         let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !trimmedEmail.isEmpty else {
@@ -138,9 +143,15 @@ struct ContentView: View {
         isLoggingIn = true
         Task {
             do {
-                // Load profile from Firebase
-                // This will authenticate first, then query for the profile
-                try await userDataManager.loadProfileFromFirebase(email: trimmedEmail)
+                // Reset any stale profile state before attempting login
+                // This ensures a fresh start for each login attempt
+                await MainActor.run {
+                    userDataManager.profile = UserProfile()
+                }
+                
+                // Load profile from Firebase with password verification
+                // This will authenticate first, then query for the profile and verify password
+                try await userDataManager.loadProfileFromFirebase(email: trimmedEmail, password: password)
                 await MainActor.run {
                     isLoggingIn = false
                     // If we get here without error, authentication succeeded

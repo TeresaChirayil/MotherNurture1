@@ -254,8 +254,9 @@ import SwiftUI
 
 struct CreateChannelView: View {
     @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var userDataManager: UserDataManager
     @Binding var isPresented: Bool
-    var onSave: ((String, String, String, String) -> Void)?
+    var onSave: ((String, String, String, String, [String]) -> Void)?
     
     @State private var channelName: String = ""
     @State private var description: String = ""
@@ -264,10 +265,14 @@ struct CreateChannelView: View {
     @State private var showTypeDropdown: Bool = false
     @State private var showingImagePicker = false
     @State private var selectedImage: UIImage? = nil
+    @State private var showMemberPicker = false
+    @State private var availableUsers: [UserProfile] = []
+    @State private var selectedMemberIds: Set<String> = []
+    @State private var isLoadingUsers = false
     
     let channelTypes = ["Public channel", "Private channel"]
     
-    init(isPresented: Binding<Bool>, onSave: ((String, String, String, String) -> Void)? = nil) {
+    init(isPresented: Binding<Bool>, onSave: ((String, String, String, String, [String]) -> Void)? = nil) {
         self._isPresented = isPresented
         self.onSave = onSave
     }
@@ -306,7 +311,7 @@ struct CreateChannelView: View {
                     Button(action: {
                         // Save channel and dismiss (only if name is not empty)
                         if !channelName.trimmingCharacters(in: .whitespaces).isEmpty {
-                            onSave?(channelName, description, category, type)
+                            onSave?(channelName, description, category, type, Array(selectedMemberIds))
                         }
                         isPresented = false
                         dismiss()
@@ -469,6 +474,34 @@ struct CreateChannelView: View {
                                     }
                                 }
                             }
+                            
+                            // Add Members Section
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Add Members")
+                                    .font(.system(size: 16, weight: .medium, design: .rounded))
+                                    .foregroundColor(Color(hex: "5C3D2E"))
+                                
+                                Button(action: {
+                                    showMemberPicker = true
+                                    loadAvailableUsers()
+                                }) {
+                                    HStack {
+                                        Image(systemName: "person.badge.plus")
+                                            .foregroundColor(Color(hex: "5C3D2E"))
+                                        Text(selectedMemberIds.isEmpty ? "Tap to add members" : "\(selectedMemberIds.count) member(s) selected")
+                                            .foregroundColor(Color(hex: "5C3D2E"))
+                                            .font(.system(size: 16, design: .rounded))
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .foregroundColor(Color(hex: "5C3D2E"))
+                                            .font(.system(size: 14))
+                                    }
+                                    .padding()
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                                .background(Color(hex: "8B9A7E"))
+                                .cornerRadius(8)
+                            }
                         }
                         .padding(.horizontal, 20)
                         .padding(.bottom, 40)
@@ -480,6 +513,163 @@ struct CreateChannelView: View {
         .sheet(isPresented: $showingImagePicker) {
             ImagePicker(selectedImage: $selectedImage)
         }
+        .sheet(isPresented: $showMemberPicker) {
+            MemberPickerView(
+                availableUsers: $availableUsers,
+                selectedMemberIds: $selectedMemberIds,
+                isLoading: $isLoadingUsers,
+                currentUserId: userDataManager.profile.userID
+            )
+        }
+    }
+    
+    private func loadAvailableUsers() {
+        guard !isLoadingUsers else { return }
+        isLoadingUsers = true
+        
+        Task {
+            do {
+                let users = try await FirebaseService.shared.fetchAllUserProfiles(
+                    excludingUserID: userDataManager.profile.userID,
+                    limit: 100
+                )
+                await MainActor.run {
+                    availableUsers = users
+                    isLoadingUsers = false
+                }
+            } catch {
+                print("Error loading users: \(error)")
+                await MainActor.run {
+                    isLoadingUsers = false
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Member Picker View
+struct MemberPickerView: View {
+    @Environment(\.dismiss) var dismiss
+    @Binding var availableUsers: [UserProfile]
+    @Binding var selectedMemberIds: Set<String>
+    @Binding var isLoading: Bool
+    var currentUserId: String?
+    
+    @State private var searchText = ""
+    
+    var filteredUsers: [UserProfile] {
+        if searchText.isEmpty {
+            return availableUsers
+        }
+        return availableUsers.filter { user in
+            let fullName = "\(user.firstName ?? "") \(user.lastName ?? "")".lowercased()
+            return fullName.contains(searchText.lowercased())
+        }
+    }
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color(hex: "F8F5EE").ignoresSafeArea()
+                
+                VStack(spacing: 0) {
+                    // Search bar
+                    HStack {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundColor(Color(hex: "5C3D2E"))
+                        TextField("Search users", text: $searchText)
+                            .foregroundColor(Color(hex: "5C3D2E"))
+                    }
+                    .padding(10)
+                    .background(Color(hex: "E8E1D7"))
+                    .cornerRadius(10)
+                    .padding()
+                    
+                    if isLoading {
+                        Spacer()
+                        ProgressView()
+                        Spacer()
+                    } else if filteredUsers.isEmpty {
+                        Spacer()
+                        Text("No users found")
+                            .foregroundColor(Color(hex: "5C3D2E").opacity(0.6))
+                        Spacer()
+                    } else {
+                        List {
+                            ForEach(filteredUsers, id: \.userID) { user in
+                                if let userId = user.userID {
+                                    MemberRow(
+                                        user: user,
+                                        isSelected: selectedMemberIds.contains(userId),
+                                        onToggle: {
+                                            if selectedMemberIds.contains(userId) {
+                                                selectedMemberIds.remove(userId)
+                                            } else {
+                                                selectedMemberIds.insert(userId)
+                                            }
+                                        }
+                                    )
+                                    .listRowBackground(Color.clear)
+                                }
+                            }
+                        }
+                        .listStyle(PlainListStyle())
+                    }
+                }
+            }
+            .navigationTitle("Add Members")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .foregroundColor(Color(hex: "5C3D2E"))
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .foregroundColor(Color(hex: "5C3D2E"))
+                    .fontWeight(.semibold)
+                }
+            }
+        }
+    }
+}
+
+struct MemberRow: View {
+    let user: UserProfile
+    let isSelected: Bool
+    let onToggle: () -> Void
+    
+    var body: some View {
+        Button(action: onToggle) {
+            HStack {
+                Circle()
+                    .fill(Color(hex: "8B9A7E"))
+                    .frame(width: 40, height: 40)
+                    .overlay(
+                        Text(String((user.firstName?.first ?? "U").uppercased()))
+                            .foregroundColor(Color(hex: "5C3D2E"))
+                            .font(.system(size: 16, weight: .medium))
+                    )
+                
+                VStack(alignment: .leading) {
+                    Text("\(user.firstName ?? "") \(user.lastName ?? "")")
+                        .foregroundColor(Color(hex: "5C3D2E"))
+                        .font(.system(size: 16, design: .rounded))
+                }
+                
+                Spacer()
+                
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .foregroundColor(isSelected ? Color(hex: "8B9A7E") : Color(hex: "5C3D2E").opacity(0.3))
+                    .font(.system(size: 24))
+            }
+            .padding(.vertical, 8)
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 }
 

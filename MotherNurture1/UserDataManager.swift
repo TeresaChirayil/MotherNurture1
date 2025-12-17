@@ -116,6 +116,14 @@ class UserDataManager: ObservableObject {
                     }
                 }
             }
+            
+            // Auto-join the welcome channel "Get to Know Each Other!"
+            do {
+                try await firebaseService.joinWelcomeChannel(userID: savedUserID)
+                print("✅ Joined welcome channel")
+            } catch {
+                print("⚠️ Error joining welcome channel: \(error)")
+            }
         } catch {
             print("❌ Error saving profile to Firebase: \(error)")
             if let nsError = error as NSError? {
@@ -130,14 +138,12 @@ class UserDataManager: ObservableObject {
     func reset() {
         profile = UserProfile()
         isAuthenticated = false
-        // Sign out from Firebase Auth
-        try? firebaseService.signOut()
     }
     
     // -----------------------------------------------------
     // MARK: - Load Profile from Firebase
     // -----------------------------------------------------
-    func loadProfileFromFirebase(userID: String? = nil, email: String? = nil) async throws {
+    func loadProfileFromFirebase(userID: String? = nil, email: String? = nil, password: String? = nil) async throws {
         // CRITICAL: Authenticate FIRST before querying Firestore
         // Firestore security rules require authentication to read user profiles
         if !firebaseService.isAuthenticated() {
@@ -163,14 +169,24 @@ class UserDataManager: ObservableObject {
         var loadedProfile: UserProfile?
         
         do {
-            if let userID = userID ?? profile.userID {
-                // Load by userID if available
+            // Prioritize the explicitly provided parameters over stored profile values
+            // This ensures retry attempts use the new input, not stale data
+            if let userID = userID {
+                // Load by userID if explicitly provided
                 print("🔍 Loading profile by userID: \(userID)")
                 loadedProfile = try await firebaseService.getUserProfile(userID: userID)
-            } else if let email = email ?? profile.email {
-                // Load by email if userID not available
+            } else if let email = email {
+                // Load by email if explicitly provided
                 print("🔍 Loading profile by email: \(email)")
                 loadedProfile = try await firebaseService.getUserProfileByEmail(email: email)
+            } else if let storedUserID = profile.userID {
+                // Fall back to stored userID
+                print("🔍 Loading profile by stored userID: \(storedUserID)")
+                loadedProfile = try await firebaseService.getUserProfile(userID: storedUserID)
+            } else if let storedEmail = profile.email {
+                // Fall back to stored email
+                print("🔍 Loading profile by stored email: \(storedEmail)")
+                loadedProfile = try await firebaseService.getUserProfileByEmail(email: storedEmail)
             } else {
                 throw NSError(
                     domain: "UserDataManager",
@@ -202,6 +218,36 @@ class UserDataManager: ObservableObject {
         }
         
         if let loadedProfile = loadedProfile {
+            // Verify password if provided
+            if let password = password {
+                // Check if user has a password hash stored
+                if loadedProfile.passwordHash != nil {
+                    // User has password - verify it
+                    guard loadedProfile.verifyPassword(password) else {
+                        print("❌ Invalid password")
+                        throw NSError(
+                            domain: "UserDataManager",
+                            code: -1,
+                            userInfo: [NSLocalizedDescriptionKey: "Incorrect password. Please try again."]
+                        )
+                    }
+                    print("✅ Password verified")
+                } else {
+                    // Legacy user without password - allow login and try to set their password
+                    print("⚠️ Legacy user without password hash - allowing login")
+                    // Try to save password hash but don't fail login if it doesn't work
+                    if let userID = loadedProfile.userID {
+                        do {
+                            let newHash = UserProfile.hashPassword(password)
+                            try await firebaseService.updateUserProfile(userID: userID, data: ["passwordHash": newHash])
+                            print("✅ Password hash saved for legacy user")
+                        } catch {
+                            print("⚠️ Could not save password hash (will try again later): \(error.localizedDescription)")
+                        }
+                    }
+                }
+            }
+            
             DispatchQueue.main.async {
                 self.profile = loadedProfile
                 self.isAuthenticated = true
@@ -209,6 +255,16 @@ class UserDataManager: ObservableObject {
             print("✅ Successfully loaded profile from Firebase")
             print("   UserID: \(loadedProfile.userID ?? "nil")")
             print("   Email: \(loadedProfile.email ?? "nil")")
+            
+            // Auto-join the welcome channel for existing users logging in
+            if let userID = loadedProfile.userID {
+                do {
+                    try await firebaseService.joinWelcomeChannel(userID: userID)
+                    print("✅ Ensured user is in welcome channel")
+                } catch {
+                    print("⚠️ Error joining welcome channel: \(error)")
+                }
+            }
         } else {
             DispatchQueue.main.async {
                 self.isAuthenticated = false

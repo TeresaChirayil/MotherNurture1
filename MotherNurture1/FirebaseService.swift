@@ -179,20 +179,37 @@ class FirebaseService {
         print("✅ Successfully updated profile")
     }
     
+    /// Update specific fields in a user profile
+    func updateUserProfile(userID: String, data: [String: Any]) async throws {
+        guard !userID.isEmpty else {
+            throw NSError(domain: "FirebaseService",
+                          code: -1,
+                          userInfo: [NSLocalizedDescriptionKey: "No userID provided"])
+        }
+        
+        var updateData = data
+        updateData["updatedAt"] = Timestamp(date: Date())
+        
+        try await db.collection("users").document(userID).updateData(updateData)
+        print("✅ Successfully updated profile fields")
+    }
+    
     // -----------------------------------------------------
     // MARK: - Delete User Profile
     // -----------------------------------------------------
     func deleteUserProfile(userID: String) async throws {
-        guard let currentUserID = getCurrentUserID() else {
+        // Require authentication but allow deleting the profile matching profile.userID
+        // (which may differ from Auth UID after login/logout cycles on shared devices)
+        guard isAuthenticated() else {
             throw NSError(domain: "FirebaseService",
                           code: 401,
                           userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])
         }
         
-        guard userID == currentUserID else {
+        guard !userID.isEmpty else {
             throw NSError(domain: "FirebaseService",
-                          code: 403,
-                          userInfo: [NSLocalizedDescriptionKey: "You can only delete your own profile"])
+                          code: 400,
+                          userInfo: [NSLocalizedDescriptionKey: "Invalid user ID"])
         }
         
         // Delete the user profile document
@@ -276,6 +293,52 @@ class FirebaseService {
     }
     
     // -----------------------------------------------------
+    // MARK: - Join Welcome Channel
+    // -----------------------------------------------------
+    /// Ensures the "Get to Know Each Other!" channel exists and adds the user to it
+    func joinWelcomeChannel(userID: String) async throws {
+        let welcomeChannelName = "Get to Know Each Other!"
+        let welcomeChannelId = "welcome-channel"
+        
+        // Check if the welcome channel exists
+        let channelDoc = try await db.collection("channels").document(welcomeChannelId).getDocument()
+        
+        if !channelDoc.exists {
+            // Create the welcome channel if it doesn't exist
+            let welcomeChannel: [String: Any] = [
+                "name": welcomeChannelName,
+                "description": "A place for everyone to introduce themselves and make new friends!",
+                "isDirectMessage": false,
+                "memberIds": [userID],
+                "adminIds": ["system"],
+                "createdAt": Timestamp(date: Date()),
+                "lastMessageAt": Timestamp(date: Date())
+            ]
+            try await db.collection("channels").document(welcomeChannelId).setData(welcomeChannel)
+            print("✅ Created welcome channel and added user \(userID)")
+        } else {
+            // Add user to existing welcome channel's memberIds
+            try await db.collection("channels").document(welcomeChannelId).updateData([
+                "memberIds": FieldValue.arrayUnion([userID])
+            ])
+            print("✅ Added user \(userID) to welcome channel")
+        }
+    }
+    
+    // -----------------------------------------------------
+    // MARK: - Add Members to Channel
+    // -----------------------------------------------------
+    /// Add multiple users to a channel's memberIds
+    func addMembersToChannel(channelId: String, memberIds: [String]) async throws {
+        guard !memberIds.isEmpty else { return }
+        
+        try await db.collection("channels").document(channelId).updateData([
+            "memberIds": FieldValue.arrayUnion(memberIds)
+        ])
+        print("✅ Added \(memberIds.count) members to channel \(channelId)")
+    }
+    
+    // -----------------------------------------------------
     // MARK: - Get Channel Members
     // -----------------------------------------------------
     func getChannelMembers(channelName: String) async throws -> [String] {
@@ -319,6 +382,7 @@ class FirebaseService {
         profile.photoURL = data["photoURL"] as? String
         profile.channelMemberships = data["channelMemberships"] as? [String]
         profile.blockedUsers = data["blockedUsers"] as? [String]
+        profile.passwordHash = data["passwordHash"] as? String
 
         profile.createdAt = data["createdAt"] as? Timestamp
         profile.updatedAt = data["updatedAt"] as? Timestamp
@@ -653,9 +717,20 @@ extension FirebaseService {
     // -----------------------------------------------------
     // MARK: - Messages
     // -----------------------------------------------------
-    func getOrCreateDirectMessageChannel(otherUserId: String, otherUserName: String) async throws -> Channel {
-        guard let currentUserId = getCurrentUserID() else {
+    /// Create or find a direct message channel between two users
+    /// - Parameters:
+    ///   - currentUserId: The current user's profile userID (Firestore document ID)
+    ///   - otherUserId: The other user's profile userID
+    ///   - currentUserName: Display name for the current user
+    ///   - otherUserName: Display name for the other user
+    func getOrCreateDirectMessageChannel(currentUserId: String, currentUserName: String, otherUserId: String, otherUserName: String) async throws -> Channel {
+        guard !currentUserId.isEmpty else {
             throw NSError(domain: "FirebaseService", code: 401, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])
+        }
+        
+        // Prevent users from messaging themselves
+        guard currentUserId != otherUserId else {
+            throw NSError(domain: "FirebaseService", code: 400, userInfo: [NSLocalizedDescriptionKey: "You cannot message yourself"])
         }
 
         let snapshot = try await db.collection("channels")
@@ -672,9 +747,16 @@ extension FirebaseService {
         }
 
         let channelId = db.collection("channels").document().documentID
-        let channel = Channel(
+        
+        // Store both user names so each user sees the other's name
+        let memberNames: [String: String] = [
+            currentUserId: currentUserName,
+            otherUserId: otherUserName
+        ]
+        
+        var channel = Channel(
             id: channelId,
-            name: otherUserName,
+            name: otherUserName, // Default name (for backwards compatibility)
             description: nil,
             imageURL: nil,
             isDirectMessage: true,
@@ -683,6 +765,7 @@ extension FirebaseService {
             createdAt: Date(),
             lastMessageAt: Date()
         )
+        channel.memberNames = memberNames
 
         try await db.collection("channels").document(channelId).setData(channel.toDictionary(), merge: true)
         return channel

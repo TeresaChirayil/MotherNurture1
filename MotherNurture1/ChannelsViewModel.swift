@@ -13,20 +13,44 @@ class ChannelsViewModel: ObservableObject {
     private let db = Firestore.firestore()
     private let storage = Storage.storage()
     private var listener: ListenerRegistration?
-    private var currentUserId: String? {
-        Auth.auth().currentUser?.uid
-    }
+    
+    /// The profile userID (Firestore document ID) - this is the stable user identity
+    /// that should be used for channel membership, NOT the Firebase Auth UID
+    private var profileUserID: String?
     
     init() {
-        setupChannelsListener()
+        // Don't auto-setup listener here - wait for setUserID to be called
+        // This ensures we use the correct profile-based userID
     }
     
     deinit {
         listener?.remove()
     }
     
-    private func setupChannelsListener() {
-        guard let userId = currentUserId else { return }
+    /// Set the user ID and start listening for channels
+    /// This should be called with userDataManager.profile.userID
+    func setUserID(_ userID: String?) {
+        // If same userID, don't restart listener
+        if profileUserID == userID && listener != nil {
+            return
+        }
+        
+        profileUserID = userID
+        listener?.remove()
+        listener = nil
+        
+        guard let userID = userID, !userID.isEmpty else {
+            channels = []
+            return
+        }
+        
+        loadCachedChannels(userId: userID)
+        setupChannelsListener(for: userID)
+    }
+    
+    private func setupChannelsListener(for userId: String) {
+        listener?.remove()
+        listener = nil
         
         isLoading = true
         
@@ -48,15 +72,18 @@ class ChannelsViewModel: ObservableObject {
                     return
                 }
                 
-                self.channels = documents.compactMap { document in
+                let updatedChannels = documents.compactMap { document in
                     Channel(id: document.documentID, data: document.data())
                 }
                 .sorted { $0.lastMessageAt > $1.lastMessageAt }
+
+                self.channels = updatedChannels
+                self.saveCachedChannels(userId: userId, channels: updatedChannels)
             }
     }
     
     func fetchChannels() async {
-        guard let userId = currentUserId else { return }
+        guard let userId = profileUserID, !userId.isEmpty else { return }
         
         isLoading = true
         
@@ -73,6 +100,7 @@ class ChannelsViewModel: ObservableObject {
             }
             
             self.channels = fetchedChannels.sorted { $0.lastMessageAt > $1.lastMessageAt }
+            self.saveCachedChannels(userId: userId, channels: self.channels)
             self.isLoading = false
         } catch {
             self.error = error
@@ -80,9 +108,40 @@ class ChannelsViewModel: ObservableObject {
             print("Error fetching channels: \(error.localizedDescription)")
         }
     }
+
+    private func cacheKey(userId: String) -> String {
+        "cachedChannels_\(userId)"
+    }
+
+    private func loadCachedChannels(userId: String) {
+        let key = cacheKey(userId: userId)
+        guard let data = UserDefaults.standard.data(forKey: key) else { return }
+        do {
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let cached = try decoder.decode([Channel].self, from: data)
+            if !cached.isEmpty {
+                self.channels = cached
+            }
+        } catch {
+            return
+        }
+    }
+
+    private func saveCachedChannels(userId: String, channels: [Channel]) {
+        let key = cacheKey(userId: userId)
+        do {
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            let data = try encoder.encode(channels)
+            UserDefaults.standard.set(data, forKey: key)
+        } catch {
+            return
+        }
+    }
     
-    func createChannel(_ channel: Channel) async -> Channel? {
-        guard let userId = currentUserId else { return nil }
+    func createChannel(_ channel: Channel, userId: String) async -> Channel? {
+        guard !userId.isEmpty else { return nil }
         
         isLoading = true
         
@@ -231,6 +290,7 @@ extension Channel {
         self.isDirectMessage = data["isDirectMessage"] as? Bool ?? false
         self.memberIds = data["memberIds"] as? [String] ?? []
         self.adminIds = data["adminIds"] as? [String] ?? []
+        self.memberNames = data["memberNames"] as? [String: String]
 
         if let createdAtTS = data["createdAt"] as? Timestamp {
             self.createdAt = createdAtTS.dateValue()
@@ -260,7 +320,26 @@ extension Channel {
         dict["adminIds"] = self.adminIds
         dict["createdAt"] = self.createdAt
         dict["lastMessageAt"] = self.lastMessageAt
+        if let memberNames = self.memberNames { dict["memberNames"] = memberNames }
         return dict
+    }
+    
+    /// Get the display name for this channel based on the current user
+    /// For DM channels, shows the other person's name
+    func displayName(forUserId currentUserId: String?) -> String {
+        guard isDirectMessage, let currentUserId = currentUserId, let memberNames = memberNames else {
+            return name
+        }
+        
+        // For DM channels, find the other user's name
+        for (userId, userName) in memberNames {
+            if userId != currentUserId {
+                return userName
+            }
+        }
+        
+        // Fallback to channel name
+        return name
     }
 }
 

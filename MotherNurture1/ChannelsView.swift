@@ -88,7 +88,7 @@ struct ChannelsView: View {
                                 ForEach(filteredChannels) { channel in
                                     ChannelRow(
                                         channel: channel,
-                                        currentUserId: userDataManager.authUserID ?? "",
+                                        currentUserId: userDataManager.profile.userID ?? "",
                                         onLeave: { leaveChannel(channel) },
                                         onEdit: { editChannel(channel) },
                                         onShowMembers: { showChannelMembers(channel) }
@@ -105,7 +105,7 @@ struct ChannelsView: View {
                                         }
                                         .tint(Color(hex: "D4A5A5"))
                                         
-                                        if channel.isAdmin(userId: userDataManager.authUserID ?? "") {
+                                        if channel.isAdmin(userId: userDataManager.profile.userID ?? "") {
                                             Button {
                                                 editChannel(channel)
                                             } label: {
@@ -140,20 +140,8 @@ struct ChannelsView: View {
             }
             .navigationTitle("Channels")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Menu {
-                        Button(action: { showCreateChannel = true }) {
-                            Label("Create Channel", systemImage: "plus.circle")
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                            .foregroundColor(Color(hex: "5C3D2E"))
-                    }
-                }
-            }
             .sheet(isPresented: $showCreateChannel) {
-                CreateChannelView(isPresented: $showCreateChannel, onSave: { name, description, category, type in
+                CreateChannelView(isPresented: $showCreateChannel, onSave: { name, description, category, type, selectedMemberIds in
                     let newChannel = Channel(
                         id: UUID().uuidString,
                         name: name,
@@ -166,9 +154,26 @@ struct ChannelsView: View {
                         lastMessageAt: Date()
                     )
                     Task {
-                        await viewModel.createChannel(newChannel)
+                        if let userId = userDataManager.profile.userID {
+                            // Create the channel first
+                            if let createdChannel = await viewModel.createChannel(newChannel, userId: userId) {
+                                // Then add the selected members
+                                if !selectedMemberIds.isEmpty {
+                                    do {
+                                        try await FirebaseService.shared.addMembersToChannel(
+                                            channelId: createdChannel.id,
+                                            memberIds: selectedMemberIds
+                                        )
+                                        print("✅ Added \(selectedMemberIds.count) members to channel")
+                                    } catch {
+                                        print("❌ Error adding members: \(error)")
+                                    }
+                                }
+                            }
+                        }
                     }
                 })
+                .environmentObject(userDataManager)
             }
             .sheet(isPresented: $isEditingChannel, onDismiss: {
                 channelToEdit = nil
@@ -194,11 +199,17 @@ struct ChannelsView: View {
                 MessagesView(channel: channel)
                     .environmentObject(userDataManager)
             }
+            .onAppear {
+                viewModel.setUserID(userDataManager.profile.userID)
+            }
+            .onChange(of: userDataManager.profile.userID) { _, newUserID in
+                viewModel.setUserID(newUserID)
+            }
         }
     }
     
     private func leaveChannel(_ channel: Channel) {
-        guard let userId = userDataManager.authUserID else { return }
+        guard let userId = userDataManager.profile.userID else { return }
         Task {
             await viewModel.leaveChannel(channelId: channel.id, userId: userId)
         }
@@ -275,7 +286,7 @@ struct ChannelRow: View {
                 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(alignment: .top) {
-                        Text(channel.name)
+                        Text(channel.displayName(forUserId: currentUserId))
                             .font(.headline)
                             .foregroundColor(Color(hex: "5C3D2E"))
                             .lineLimit(1)

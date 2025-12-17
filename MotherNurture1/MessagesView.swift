@@ -14,8 +14,11 @@ struct MessagesView: View {
     @State private var newMessage: String = ""
     @State private var showBlockConfirmation = false
     @State private var showReportConfirmation = false
+    @State private var showEndChatConfirmation = false
     @State private var showFilterError = false
     @State private var filterErrorMessage = ""
+    @State private var showSendError = false
+    @State private var sendErrorMessage = ""
     @State private var messages: [Message] = []
     @State private var messageListener: ListenerRegistration?
     @State private var isLoading = true
@@ -25,7 +28,7 @@ struct MessagesView: View {
     }
     
     private var currentUserID: String? {
-        userDataManager.authUserID
+        userDataManager.profile.userID
     }
     
     private var currentUserName: String {
@@ -47,13 +50,13 @@ struct MessagesView: View {
                             .foregroundColor(Color(hex: "5C3D2E"))
                             .font(.system(size: 20, weight: .medium))
                     }
-                    Text(channel.name)
+                    Text(channel.displayName(forUserId: currentUserID))
                         .font(.system(size: 18, weight: .bold, design: .rounded))
                         .foregroundColor(Color(hex: "5C3D2E"))
                     Spacer()
                     
-                    if canBlockOrReport {
-                        Menu {
+                    Menu {
+                        if canBlockOrReport {
                             Button(role: .destructive, action: {
                                 showBlockConfirmation = true
                             }) {
@@ -65,11 +68,17 @@ struct MessagesView: View {
                             }) {
                                 Label("Report User/Content", systemImage: "flag")
                             }
-                        } label: {
-                            Image(systemName: "ellipsis")
-                                .foregroundColor(Color(hex: "5C3D2E"))
-                                .font(.system(size: 18, weight: .medium))
                         }
+                        
+                        Button(role: .destructive, action: {
+                            showEndChatConfirmation = true
+                        }) {
+                            Label("End Chat", systemImage: "xmark.circle")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .foregroundColor(Color(hex: "5C3D2E"))
+                            .font(.system(size: 18, weight: .medium))
                     }
                 }
                 .padding(.horizontal, 20)
@@ -96,36 +105,74 @@ struct MessagesView: View {
                             } else {
                                 ForEach(messages) { msg in
                                     let isCurrentUser = currentUserID != nil && msg.authorID == currentUserID
-                                    HStack(alignment: .bottom) {
-                                        if isCurrentUser {
-                                            Spacer(minLength: 40)
-                                            Text(msg.text)
-                                                .padding(.vertical, 10)
-                                                .padding(.horizontal, 14)
-                                                .background(Color(hex: "D7C4B7")) // Sent: light brown
-                                                .foregroundColor(Color(hex: "000000"))
-                                                .cornerRadius(14)
-                                                .frame(maxWidth: 260, alignment: .trailing)
-                                                .overlay(
-                                                    RoundedRectangle(cornerRadius: 14)
-                                                        .stroke(Color.black.opacity(0.05), lineWidth: 0.5)
-                                                )
-                                        } else {
-                                            Text(msg.text)
-                                                .padding(.vertical, 10)
-                                                .padding(.horizontal, 14)
-                                                .background(Color(hex: "DDE3D0")) // Received: light green
-                                                .foregroundColor(Color(hex: "000000"))
-                                                .cornerRadius(14)
-                                                .frame(maxWidth: 260, alignment: .leading)
-                                                .overlay(
-                                                    RoundedRectangle(cornerRadius: 14)
-                                                        .stroke(Color.black.opacity(0.05), lineWidth: 0.5)
-                                                )
-                                            Spacer(minLength: 40)
+                                    let isGroupChannel = !channel.isDirectMessage
+                                    
+                                    // Check if message is read by others (for sent messages)
+                                    let otherMemberIds = channel.memberIds.filter { $0 != currentUserID }
+                                    let isReadByOthers = !otherMemberIds.isEmpty && otherMemberIds.allSatisfy { msg.readBy.contains($0) }
+                                    
+                                    VStack(alignment: isCurrentUser ? .trailing : .leading, spacing: 2) {
+                                        // Show sender name in group channels for messages from others
+                                        if isGroupChannel && !isCurrentUser && !msg.authorName.isEmpty {
+                                            Text(msg.authorName)
+                                                .font(.system(size: 12, weight: .medium, design: .rounded))
+                                                .foregroundColor(Color(hex: "5C3D2E").opacity(0.7))
+                                                .padding(.horizontal, 4)
                                         }
+                                        
+                                        HStack(alignment: .bottom) {
+                                            if isCurrentUser {
+                                                Spacer(minLength: 40)
+                                                Text(msg.text)
+                                                    .padding(.vertical, 10)
+                                                    .padding(.horizontal, 14)
+                                                    .background(Color(hex: "D7C4B7")) // Sent: light brown
+                                                    .foregroundColor(Color(hex: "000000"))
+                                                    .cornerRadius(14)
+                                                    .frame(maxWidth: 260, alignment: .trailing)
+                                                    .overlay(
+                                                        RoundedRectangle(cornerRadius: 14)
+                                                            .stroke(Color.black.opacity(0.05), lineWidth: 0.5)
+                                                    )
+                                            } else {
+                                                Text(msg.text)
+                                                    .padding(.vertical, 10)
+                                                    .padding(.horizontal, 14)
+                                                    .background(Color(hex: "DDE3D0")) // Received: light green
+                                                    .foregroundColor(Color(hex: "000000"))
+                                                    .cornerRadius(14)
+                                                    .frame(maxWidth: 260, alignment: .leading)
+                                                    .overlay(
+                                                        RoundedRectangle(cornerRadius: 14)
+                                                            .stroke(Color.black.opacity(0.05), lineWidth: 0.5)
+                                                    )
+                                                Spacer(minLength: 40)
+                                            }
+                                        }
+                                        
+                                        // Time stamp and delivery status
+                                        HStack(spacing: 4) {
+                                            Text(msg.formattedTime)
+                                                .font(.system(size: 10, design: .rounded))
+                                                .foregroundColor(Color(hex: "5C3D2E").opacity(0.5))
+                                            
+                                            // Show delivery/read status for sent messages
+                                            if isCurrentUser {
+                                                if isReadByOthers {
+                                                    Text("Read")
+                                                        .font(.system(size: 10, design: .rounded))
+                                                        .foregroundColor(Color(hex: "8B9A7E"))
+                                                } else if msg.isDelivered {
+                                                    Text("Delivered")
+                                                        .font(.system(size: 10, design: .rounded))
+                                                        .foregroundColor(Color(hex: "5C3D2E").opacity(0.5))
+                                                }
+                                            }
+                                        }
+                                        .padding(.horizontal, 4)
                                     }
                                     .padding(.horizontal, 20)
+                                    .padding(.vertical, 2)
                                     .id(msg.id)
                                 }
                             }
@@ -185,9 +232,23 @@ struct MessagesView: View {
         } message: {
             Text(filterErrorMessage)
         }
+        .confirmationDialog("End Chat", isPresented: $showEndChatConfirmation, titleVisibility: .visible) {
+            Button("End Chat", role: .destructive) {
+                Task { await endChat() }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Leave this conversation? You can start a new chat with this person later if you change your mind.")
+        }
+        .alert("Message Failed", isPresented: $showSendError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(sendErrorMessage)
+        }
         .onAppear {
             loadMessages()
             setupMessageListener()
+            markMessagesAsRead()
         }
         .onDisappear {
             messageListener?.remove()
@@ -228,10 +289,17 @@ struct MessagesView: View {
         let trimmedMessage = newMessage.trimmingCharacters(in: .whitespaces)
         guard !trimmedMessage.isEmpty else { return }
 
-        guard let authUID = userDataManager.authUserID else {
-            print("❌ Cannot send message: not authenticated")
+        guard let profileUserID = userDataManager.profile.userID else {
+            print("❌ Cannot send message: no profile userID")
+            sendErrorMessage = "Unable to send message. Please log in again."
+            showSendError = true
             return
         }
+        
+        print("📤 Attempting to send message...")
+        print("   Channel ID: \(channel.id)")
+        print("   Profile UserID: \(profileUserID)")
+        print("   Author Name: \(currentUserName)")
 
         // Filter content
         let filterResult = ContentFilterService.shared.filterContent(trimmedMessage)
@@ -244,7 +312,7 @@ struct MessagesView: View {
         let message = Message(
             channelID: channel.id,
             text: trimmedMessage,
-            authorID: authUID,
+            authorID: profileUserID,
             authorName: currentUserName,
             createdAt: Timestamp(),
             updatedAt: Timestamp()
@@ -254,12 +322,14 @@ struct MessagesView: View {
 
         Task {
             do {
-                try await FirebaseService.shared.sendMessage(message)
-                print("✅ Message sent as \(authUID)")
+                let messageId = try await FirebaseService.shared.sendMessage(message)
+                print("✅ Message sent successfully! ID: \(messageId)")
             } catch {
-                print("❌ Message send failed:", error.localizedDescription)
+                print("❌ Message send failed: \(error)")
                 await MainActor.run {
                     newMessage = trimmedMessage
+                    sendErrorMessage = "Failed to send message: \(error.localizedDescription)"
+                    showSendError = true
                 }
             }
         }
@@ -317,6 +387,63 @@ struct MessagesView: View {
     private func reportUser() {
         let channelID = channel.id
         MailHelper.reportMessage(channelID: channelID, channelName: channel.name, userName: channel.name)
+    }
+    
+    private func endChat() async {
+        guard let userId = userDataManager.profile.userID else {
+            print("❌ Cannot end chat: no profile userID")
+            return
+        }
+        
+        do {
+            // Remove user from the channel
+            try await Firestore.firestore().collection("channels").document(channel.id).updateData([
+                "memberIds": FieldValue.arrayRemove([userId])
+            ])
+            
+            // Remove channel from user's memberships
+            try await Firestore.firestore().collection("users").document(userId).updateData([
+                "channelMemberships": FieldValue.arrayRemove([channel.id])
+            ])
+            
+            print("✅ Successfully left chat: \(channel.name)")
+            
+            // Dismiss the view
+            await MainActor.run {
+                dismiss()
+            }
+        } catch {
+            print("❌ Error ending chat: \(error.localizedDescription)")
+        }
+    }
+    
+    private func markMessagesAsRead() {
+        guard let userId = currentUserID else { return }
+        
+        Task {
+            let db = Firestore.firestore()
+            let messagesRef = db.collection("channels").document(channel.id).collection("messages")
+            
+            do {
+                // Get all messages not authored by current user that haven't been read by them
+                let snapshot = try await messagesRef
+                    .whereField("authorID", isNotEqualTo: userId)
+                    .getDocuments()
+                
+                for doc in snapshot.documents {
+                    let data = doc.data()
+                    var readBy = data["readBy"] as? [String] ?? []
+                    
+                    // Only update if user hasn't already read this message
+                    if !readBy.contains(userId) {
+                        readBy.append(userId)
+                        try await doc.reference.updateData(["readBy": readBy])
+                    }
+                }
+            } catch {
+                print("⚠️ Error marking messages as read: \(error.localizedDescription)")
+            }
+        }
     }
 }
 

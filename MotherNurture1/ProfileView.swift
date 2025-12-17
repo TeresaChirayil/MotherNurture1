@@ -474,17 +474,12 @@ struct ProfileView: View {
     
     // MARK: - Sign Out
     private func signOut() {
-        do {
-            try Auth.auth().signOut()
-            userDataManager.clearProfile()
+        userDataManager.clearProfile()
 
-            // Trigger redirect — tell the app the user is now logged out
-            userDataManager.isAuthenticated = false
+        // Trigger redirect — tell the app the user is now logged out
+        userDataManager.isAuthenticated = false
 
-            print("Signed out successfully")
-        } catch {
-            print("Error signing out: \(error.localizedDescription)")
-        }
+        print("Signed out successfully")
     }
 
     private func calculateAge() -> Int? {

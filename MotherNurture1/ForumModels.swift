@@ -164,8 +164,10 @@ struct Message: Identifiable {
     var authorName: String
     var createdAt: Timestamp
     var updatedAt: Timestamp
+    var isDelivered: Bool
+    var readBy: [String] // Array of userIDs who have read the message
     
-    init(id: String? = nil, channelID: String, text: String, authorID: String, authorName: String, createdAt: Timestamp? = nil, updatedAt: Timestamp? = nil) {
+    init(id: String? = nil, channelID: String, text: String, authorID: String, authorName: String, createdAt: Timestamp? = nil, updatedAt: Timestamp? = nil, isDelivered: Bool = true, readBy: [String] = []) {
         self.id = id
         self.channelID = channelID
         self.text = text
@@ -173,6 +175,8 @@ struct Message: Identifiable {
         self.authorName = authorName
         self.createdAt = createdAt ?? Timestamp(date: Date())
         self.updatedAt = updatedAt ?? Timestamp(date: Date())
+        self.isDelivered = isDelivered
+        self.readBy = readBy
     }
     
     func toDictionary() -> [String: Any] {
@@ -182,8 +186,29 @@ struct Message: Identifiable {
             "authorID": authorID,
             "authorName": authorName,
             "createdAt": createdAt,
-            "updatedAt": updatedAt
+            "updatedAt": updatedAt,
+            "isDelivered": isDelivered,
+            "readBy": readBy
         ]
+    }
+    
+    // Format timestamp for display
+    var formattedTime: String {
+        let date = createdAt.dateValue()
+        let formatter = DateFormatter()
+        let calendar = Calendar.current
+        
+        if calendar.isDateInToday(date) {
+            formatter.dateFormat = "h:mm a"
+        } else if calendar.isDateInYesterday(date) {
+            formatter.dateFormat = "'Yesterday' h:mm a"
+        } else if calendar.isDate(date, equalTo: Date(), toGranularity: .weekOfYear) {
+            formatter.dateFormat = "EEEE h:mm a"
+        } else {
+            formatter.dateFormat = "MMM d, h:mm a"
+        }
+        
+        return formatter.string(from: date)
     }
     
     static func fromDictionary(_ data: [String: Any], id: String) -> Message? {
@@ -196,12 +221,17 @@ struct Message: Identifiable {
             return nil
         }
         
+        let isDelivered = data["isDelivered"] as? Bool ?? true
+        let readBy = data["readBy"] as? [String] ?? []
+        
         var message = Message(
             id: id,
             channelID: channelID,
             text: text,
             authorID: authorID,
-            authorName: authorName
+            authorName: authorName,
+            isDelivered: isDelivered,
+            readBy: readBy
         )
         message.createdAt = createdAt
         message.updatedAt = updatedAt

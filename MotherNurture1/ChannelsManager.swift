@@ -252,6 +252,7 @@ struct Channel: Identifiable, Codable, Equatable, Hashable {
     var adminIds: [String]
     var createdAt: Date
     var lastMessageAt: Date
+    var memberNames: [String: String]? // Maps userID to display name for DM channels
 
     static func == (lhs: Channel, rhs: Channel) -> Bool {
         return lhs.id == rhs.id

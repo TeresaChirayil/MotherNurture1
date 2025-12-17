@@ -7,6 +7,7 @@
 
 import Foundation
 import FirebaseFirestore
+import CommonCrypto
 
 struct UserProfile: Codable {
     // Sign Up Information
@@ -58,6 +59,9 @@ struct UserProfile: Codable {
     
     // Blocked Users
     var blockedUsers: [String]? // Array of userIDs that this user has blocked
+    
+    // Password (hashed)
+    var passwordHash: String?
     
     init() {
         self.createdAt = Timestamp(date: Date())
@@ -131,8 +135,31 @@ struct UserProfile: Codable {
         if let userID = userID { dict["userID"] = userID }
         if let channelMemberships = channelMemberships { dict["channelMemberships"] = channelMemberships }
         if let blockedUsers = blockedUsers { dict["blockedUsers"] = blockedUsers }
+        if let passwordHash = passwordHash { dict["passwordHash"] = passwordHash }
         
         return dict
+    }
+    
+    // Simple password hashing using SHA256
+    static func hashPassword(_ password: String) -> String {
+        let data = Data(password.utf8)
+        var hash = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
+        data.withUnsafeBytes {
+            _ = CC_SHA256($0.baseAddress, CC_LONG(data.count), &hash)
+        }
+        return hash.map { String(format: "%02x", $0) }.joined()
+    }
+    
+    // Verify password
+    func verifyPassword(_ password: String) -> Bool {
+        guard let storedHash = passwordHash else {
+            print("⚠️ No password hash stored for this user - user may have registered before password feature")
+            return false
+        }
+        let inputHash = UserProfile.hashPassword(password)
+        let matches = inputHash == storedHash
+        print("🔐 Password verification: stored=\(storedHash.prefix(10))... input=\(inputHash.prefix(10))... matches=\(matches)")
+        return matches
     }
 }
 

@@ -811,6 +811,9 @@ struct MatchmakingView: View {
                                 
                                 Button(action: {
                                     Task {
+                                        // Clear seen profiles to show them again
+                                        seenProfileIDs = []
+                                        currentIndex = 0
                                         await loadProfiles()
                                     }
                                 }) {
@@ -883,9 +886,17 @@ struct MatchmakingView: View {
                             HStack(spacing: 16) {
                                 Button(action: {
                                     guard let profile = matchedProfile else { return }
+                                    guard let currentUserId = userDataManager.profile.userID else { return }
+                                    
+                                    // Get current user's name
+                                    let currentUserName = "\(userDataManager.profile.firstName ?? "") \(userDataManager.profile.lastName ?? "")".trimmingCharacters(in: .whitespaces)
+                                    let displayCurrentUserName = currentUserName.isEmpty ? "User" : currentUserName
+                                    
                                     Task {
                                         do {
                                             let channel = try await FirebaseService.shared.getOrCreateDirectMessageChannel(
+                                                currentUserId: currentUserId,
+                                                currentUserName: displayCurrentUserName,
                                                 otherUserId: profile.id,
                                                 otherUserName: profile.name.trimmingCharacters(in: .whitespaces)
                                             )
@@ -960,19 +971,33 @@ struct MatchmakingView: View {
     private func loadProfiles() async {
         isLoading = true
         do {
-            let currentUserID = userDataManager.authUserID ?? userDataManager.profile.userID
+            let currentUserID = userDataManager.profile.userID ?? userDataManager.authUserID
+            let currentUserEmail = userDataManager.profile.email?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             let userProfiles = try await FirebaseService.shared.fetchAllUserProfiles(
                 excludingUserID: currentUserID,
                 limit: 50
             )
-            let matchmakingProfiles = userProfiles.compactMap { userProfile -> Profile? in
-                convertToMatchmakingProfile(userProfile)
-            }
+            let matchmakingProfiles = userProfiles
+                .filter { userProfile in
+                    if let currentUserID {
+                        if userProfile.userID == currentUserID { return false }
+                    }
+                    if let currentUserEmail, let email = userProfile.email?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+                        if email == currentUserEmail { return false }
+                    }
+                    return true
+                }
+                .compactMap { userProfile -> Profile? in
+                    convertToMatchmakingProfile(userProfile)
+                }
             await MainActor.run {
                 var base = matchmakingProfiles
                 if base.isEmpty { base = mockProfiles }
                 if let currentUserID {
                     base = base.filter { $0.id != currentUserID }
+                }
+                if let currentUserEmail {
+                    base = base.filter { $0.id != currentUserEmail }
                 }
                 // Exclude seen
                 let unseen = base.filter { !seenProfileIDs.contains($0.id) }
@@ -993,7 +1018,7 @@ struct MatchmakingView: View {
                 self.showError = true
                 let unseen = mockProfiles.filter { !seenProfileIDs.contains($0.id) }
                 if shuffleSeed == 0 {
-                    let currentUserID = userDataManager.authUserID ?? userDataManager.profile.userID
+                    let currentUserID = userDataManager.profile.userID ?? userDataManager.authUserID
                     let seed = Int((currentUserID ?? UUID().uuidString).hashValue & 0x7fffffff)
                     shuffleSeed = max(1, seed)
                 }
