@@ -39,15 +39,9 @@ struct ForumView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                // Two-tone background: top white, bottom green
-                VStack(spacing: 0) {
-                    Color.white
-                        .frame(height: 180)
-                        .ignoresSafeArea(edges: .top)
-                    Color(hex: "8B9A7E")
-                        .ignoresSafeArea()
-                }
-                .ignoresSafeArea()
+                // Unified warm background
+                Color(hex: "F8F5EE")
+                    .ignoresSafeArea()
                 
                 VStack(spacing: 0) {
                     // Header with centered title
@@ -129,7 +123,38 @@ struct ForumView: View {
                     }
                     .padding(.bottom, 10)
                     
-                    // Filter Buttons - styled to match compact look
+                    // Topic Cards - horizontally scrollable
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Topics")
+                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .foregroundColor(Color(hex: "5C3D2E").opacity(0.6))
+                            .padding(.horizontal, 20)
+                        
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 12) {
+                                ForEach(recommendedTags, id: \.self) { tag in
+                                    TopicCard(
+                                        tag: tag,
+                                        isSelected: selectedTag == tag,
+                                        onTap: {
+                                            if selectedTag == tag {
+                                                selectedTag = nil
+                                                searchText = ""
+                                            } else {
+                                                selectedTag = tag
+                                                searchText = tag
+                                            }
+                                            Task { await loadPosts() }
+                                        }
+                                    )
+                                }
+                            }
+                            .padding(.horizontal, 20)
+                        }
+                    }
+                    .padding(.bottom, 12)
+                    
+                    // Filter Buttons
                     HStack(spacing: 10) {
                         ForEach(FeedFilter.allCases, id: \.self) { filter in
                             Button(action: {
@@ -137,42 +162,38 @@ struct ForumView: View {
                                 Task { await loadPosts() }
                             }) {
                                 Text(filter.rawValue)
-                                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                    .font(.system(size: 13, weight: .semibold, design: .rounded))
                                     .foregroundColor(selectedFilter == filter ? .white : Color(hex: "5C3D2E"))
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 9)
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 8)
                                     .background(selectedFilter == filter ? Color(hex: "8B9A7E") : Color.white)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 18)
-                                            .stroke(Color(hex: "8B9A7E").opacity(selectedFilter == filter ? 0 : 0.45), lineWidth: 1)
-                                    )
-                                    .cornerRadius(18)
-                                    .shadow(color: .black.opacity(selectedFilter == filter ? 0.08 : 0.04), radius: 4, x: 0, y: 2)
+                                    .cornerRadius(20)
+                                    .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 2)
                             }
                         }
                         Spacer(minLength: 0)
                     }
                     .padding(.horizontal, 20)
-                    .padding(.bottom, 14)
+                    .padding(.bottom, 12)
                     
                     // Posts Feed
                     if isLoading {
                         Spacer()
                         ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            .progressViewStyle(CircularProgressViewStyle(tint: Color(hex: "8B9A7E")))
                         Spacer()
                     } else if filteredPosts.isEmpty {
                         Spacer()
-                        VStack(spacing: 12) {
-                            Image(systemName: "tray")
+                        VStack(spacing: 16) {
+                            Image(systemName: "text.bubble")
                                 .font(.system(size: 48))
-                                .foregroundColor(.white.opacity(0.6))
+                                .foregroundColor(Color(hex: "8B9A7E").opacity(0.5))
                             Text("No posts yet")
-                                .font(.system(size: 18, design: .rounded))
-                                .foregroundColor(.white.opacity(0.8))
-                            Text("Be the first to create a post!")
+                                .font(.system(size: 18, weight: .medium, design: .rounded))
+                                .foregroundColor(Color(hex: "5C3D2E"))
+                            Text("Be the first to start a conversation!")
                                 .font(.system(size: 14, design: .rounded))
-                                .foregroundColor(.white.opacity(0.6))
+                                .foregroundColor(Color(hex: "5C3D2E").opacity(0.6))
                         }
                         Spacer()
                     } else {
@@ -450,6 +471,73 @@ private struct SuggestionsPanel: View {
     }
 }
 
+// MARK: - Topic Card View
+struct TopicCard: View {
+    let tag: String
+    let isSelected: Bool
+    let onTap: () -> Void
+    
+    private var iconName: String {
+        switch tag.lowercased() {
+        case "pregnancy": return "heart.fill"
+        case "newborn": return "moon.stars.fill"
+        case "breastfeeding": return "drop.fill"
+        case "sleep": return "bed.double.fill"
+        case "postpartum": return "sparkles"
+        case "self-care": return "leaf.fill"
+        case "nutrition": return "carrot.fill"
+        case "milestones": return "star.fill"
+        case "toddler": return "figure.walk"
+        case "mental health": return "brain.head.profile"
+        case "work-life": return "briefcase.fill"
+        case "single parenting": return "person.fill"
+        case "support": return "hand.raised.fill"
+        case "birth stories": return "book.fill"
+        default: return "tag.fill"
+        }
+    }
+    
+    private var gradientColors: [Color] {
+        if isSelected {
+            return [Color(hex: "8B9A7E"), Color(hex: "6B7A5E")]
+        }
+        return [Color.white, Color(hex: "F8F5EE")]
+    }
+    
+    var body: some View {
+        Button(action: onTap) {
+            VStack(spacing: 8) {
+                ZStack {
+                    Circle()
+                        .fill(isSelected ? Color.white.opacity(0.2) : Color(hex: "8B9A7E").opacity(0.15))
+                        .frame(width: 44, height: 44)
+                    
+                    Image(systemName: iconName)
+                        .font(.system(size: 20))
+                        .foregroundColor(isSelected ? .white : Color(hex: "8B9A7E"))
+                }
+                
+                Text(tag)
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundColor(isSelected ? .white : Color(hex: "5C3D2E"))
+                    .lineLimit(1)
+            }
+            .frame(width: 80)
+            .padding(.vertical, 12)
+            .background(
+                LinearGradient(colors: gradientColors, startPoint: .top, endPoint: .bottom)
+            )
+            .cornerRadius(14)
+            .shadow(color: isSelected ? Color(hex: "8B9A7E").opacity(0.3) : Color.black.opacity(0.06), radius: 8, x: 0, y: 4)
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(isSelected ? Color.clear : Color(hex: "8B9A7E").opacity(0.15), lineWidth: 1)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
 // MARK: - Helpers
 private extension Array where Element: Hashable {
     func uniqued() -> [Element] {
@@ -473,6 +561,7 @@ struct PostRowView: View {
     @State private var commentCount: Int
     @State private var showBlockConfirmation = false
     @State private var showReportConfirmation = false
+    @State private var showDeleteConfirmation = false
     let post: ForumPost
     var onRefresh: (() -> Void)?
     
@@ -484,30 +573,73 @@ struct PostRowView: View {
         self.onRefresh = onRefresh
     }
     
+    private var isOwnPost: Bool {
+        guard let userID = userDataManager.profile.userID else { return false }
+        return post.authorID == userID
+    }
+    
     private var canBlockOrReport: Bool {
         guard let userID = userDataManager.profile.userID else { return false }
         return post.authorID != userID
+    }
+
+    private var displayContent: String {
+        let title = post.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let content = post.content.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if content.caseInsensitiveCompare(title) == .orderedSame {
+            return ""
+        }
+
+        let lines = content.components(separatedBy: .newlines)
+        if let firstNonEmptyIndex = lines.firstIndex(where: { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
+            let firstLine = lines[firstNonEmptyIndex].trimmingCharacters(in: .whitespacesAndNewlines)
+            if firstLine.caseInsensitiveCompare(title) == .orderedSame {
+                let remaining = lines.dropFirst(firstNonEmptyIndex + 1).joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+                return remaining
+            }
+        }
+
+        return content
     }
     
     var body: some View {
         Button(action: {
             showPostDetail = true
         }) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Text(post.title)
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
-                        .foregroundColor(.black)
-                        .lineLimit(1)
+            VStack(alignment: .leading, spacing: 0) {
+                // Header with author info and menu
+                HStack(spacing: 10) {
+                    // Author avatar
+                    Circle()
+                        .fill(Color(hex: "8B9A7E").opacity(0.3))
+                        .frame(width: 40, height: 40)
+                        .overlay(
+                            Text(post.authorName.prefix(1).uppercased())
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(Color(hex: "5C3D2E"))
+                        )
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(post.authorName)
+                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .foregroundColor(Color(hex: "5C3D2E"))
+                        
+                        Text(timeAgo(post.createdAt.dateValue()))
+                            .font(.system(size: 12, design: .rounded))
+                            .foregroundColor(Color(hex: "5C3D2E").opacity(0.5))
+                    }
                     
                     Spacer()
                     
-                    Text(formatDate(post.createdAt.dateValue()))
-                        .font(.system(size: 12, design: .rounded))
-                        .foregroundColor(Color(hex: "8B9A7E"))
-                    
-                    if canBlockOrReport {
-                        Menu {
+                    Menu {
+                        if isOwnPost {
+                            Button(role: .destructive, action: {
+                                showDeleteConfirmation = true
+                            }) {
+                                Label("Delete Post", systemImage: "trash")
+                            }
+                        } else {
                             Button(role: .destructive, action: {
                                 showBlockConfirmation = true
                             }) {
@@ -519,63 +651,98 @@ struct PostRowView: View {
                             }) {
                                 Label("Report Post", systemImage: "flag")
                             }
-                        } label: {
-                            Image(systemName: "ellipsis")
-                                .foregroundColor(Color(hex: "5C3D2E").opacity(0.6))
-                                .font(.system(size: 14))
                         }
-                    } else {
+                    } label: {
                         Image(systemName: "ellipsis")
-                            .foregroundColor(Color(hex: "5C3D2E").opacity(0.6))
-                            .font(.system(size: 14))
+                            .foregroundColor(Color(hex: "5C3D2E").opacity(0.5))
+                            .font(.system(size: 16))
+                            .frame(width: 32, height: 32)
                     }
                 }
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
+                .padding(.bottom, 12)
                 
-                Text(post.authorName)
-                    .font(.system(size: 14, design: .rounded))
-                    .foregroundColor(Color(hex: "8B9A7E"))
+                // Title
+                Text(post.title)
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                    .foregroundColor(Color(hex: "5C3D2E"))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 16)
                 
-                Text(post.content)
-                    .font(.system(size: 14, design: .rounded))
-                    .foregroundColor(.black)
-                    .lineLimit(3)
+                // Content (avoid duplicating title)
+                if !displayContent.isEmpty {
+                    Text(displayContent)
+                        .font(.system(size: 15, design: .rounded))
+                        .foregroundColor(Color(hex: "5C3D2E").opacity(0.8))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 6)
+                }
                 
-                HStack(spacing: 16) {
-                    Button(action: {
-                        toggleLike()
-                    }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: isLiked ? "heart.fill" : "heart")
-                                .foregroundColor(isLiked ? .red : .black)
-                            Text("\(likeCount)")
-                                .foregroundColor(.black)
+                // Tags
+                if let tags = post.tags, !tags.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(tags.prefix(3), id: \.self) { tag in
+                                Text("#\(tag)")
+                                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                                    .foregroundColor(Color(hex: "8B9A7E"))
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
+                                    .background(Color(hex: "8B9A7E").opacity(0.15))
+                                    .cornerRadius(12)
+                            }
                         }
-                        .font(.system(size: 14, design: .rounded))
+                        .padding(.horizontal, 16)
+                    }
+                    .padding(.top, 10)
+                }
+                
+                // Divider
+                Rectangle()
+                    .fill(Color(hex: "5C3D2E").opacity(0.08))
+                    .frame(height: 1)
+                    .padding(.top, 14)
+                
+                // Actions bar
+                HStack(spacing: 0) {
+                    // Like button
+                    Button(action: { toggleLike() }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: isLiked ? "heart.fill" : "heart")
+                                .font(.system(size: 18))
+                                .foregroundColor(isLiked ? Color(hex: "E57373") : Color(hex: "5C3D2E").opacity(0.6))
+                            Text("\(likeCount)")
+                                .font(.system(size: 14, weight: .medium, design: .rounded))
+                                .foregroundColor(Color(hex: "5C3D2E").opacity(0.7))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
                     }
                     .buttonStyle(PlainButtonStyle())
                     
-                    HStack(spacing: 4) {
-                        Image(systemName: "message")
-                            .foregroundColor(.black)
+                    // Vertical divider
+                    Rectangle()
+                        .fill(Color(hex: "5C3D2E").opacity(0.08))
+                        .frame(width: 1, height: 24)
+                    
+                    // Comment button
+                    HStack(spacing: 6) {
+                        Image(systemName: "bubble.right")
+                            .font(.system(size: 17))
+                            .foregroundColor(Color(hex: "5C3D2E").opacity(0.6))
                         Text("\(commentCount)")
-                            .foregroundColor(.black)
+                            .font(.system(size: 14, weight: .medium, design: .rounded))
+                            .foregroundColor(Color(hex: "5C3D2E").opacity(0.7))
                     }
-                    .font(.system(size: 14, design: .rounded))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
                 }
             }
-            .padding()
-            .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.white)
-            .cornerRadius(12)
-            .overlay(
-                HStack {
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .foregroundColor(Color(hex: "5C3D2E").opacity(0.4))
-                        .font(.system(size: 12))
-                        .padding(.trailing, 12)
-                }
-            )
+            .cornerRadius(16)
+            .shadow(color: Color.black.opacity(0.06), radius: 10, x: 0, y: 4)
         }
         .buttonStyle(PlainButtonStyle())
         .sheet(isPresented: $showPostDetail, onDismiss: {
@@ -602,6 +769,24 @@ struct PostRowView: View {
             Button("Cancel", role: .cancel) { }
         } message: {
             Text("Report this post for inappropriate content?")
+        }
+        .confirmationDialog("Delete Post", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
+            Button("Delete", role: .destructive) {
+                Task { await deletePost() }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Are you sure you want to delete this post? This cannot be undone.")
+        }
+    }
+    
+    private func deletePost() async {
+        guard let postID = post.id else { return }
+        do {
+            try await FirebaseService.shared.deletePost(postID: postID)
+            onRefresh?()
+        } catch {
+            print("Error deleting post: \(error)")
         }
     }
     
@@ -694,6 +879,23 @@ struct PostRowView: View {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         return formatter.string(from: date)
+    }
+    
+    private func timeAgo(_ date: Date) -> String {
+        let now = Date()
+        let components = Calendar.current.dateComponents([.minute, .hour, .day, .weekOfYear], from: date, to: now)
+        
+        if let weeks = components.weekOfYear, weeks > 0 {
+            return weeks == 1 ? "1 week ago" : "\(weeks) weeks ago"
+        } else if let days = components.day, days > 0 {
+            return days == 1 ? "1 day ago" : "\(days) days ago"
+        } else if let hours = components.hour, hours > 0 {
+            return hours == 1 ? "1 hour ago" : "\(hours) hours ago"
+        } else if let minutes = components.minute, minutes > 0 {
+            return minutes == 1 ? "1 min ago" : "\(minutes) mins ago"
+        } else {
+            return "Just now"
+        }
     }
 }
 

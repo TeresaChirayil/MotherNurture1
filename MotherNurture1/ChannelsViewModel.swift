@@ -9,10 +9,12 @@ class ChannelsViewModel: ObservableObject {
     @Published var channels: [Channel] = []
     @Published var isLoading = false
     @Published var error: Error?
+    @Published var unreadCounts: [String: Int] = [:]
     
     private let db = Firestore.firestore()
     private let storage = Storage.storage()
     private var listener: ListenerRegistration?
+    private var messageListeners: [String: ListenerRegistration] = [:]
     
     /// The profile userID (Firestore document ID) - this is the stable user identity
     /// that should be used for channel membership, NOT the Firebase Auth UID
@@ -25,6 +27,14 @@ class ChannelsViewModel: ObservableObject {
     
     deinit {
         listener?.remove()
+        for (_, l) in messageListeners {
+            l.remove()
+        }
+        messageListeners.removeAll()
+    }
+
+    var totalUnread: Int {
+        unreadCounts.values.reduce(0, +)
     }
     
     /// Set the user ID and start listening for channels
@@ -38,6 +48,12 @@ class ChannelsViewModel: ObservableObject {
         profileUserID = userID
         listener?.remove()
         listener = nil
+
+        for (_, l) in messageListeners {
+            l.remove()
+        }
+        messageListeners.removeAll()
+        unreadCounts.removeAll()
         
         guard let userID = userID, !userID.isEmpty else {
             channels = []
@@ -45,6 +61,7 @@ class ChannelsViewModel: ObservableObject {
         }
         
         loadCachedChannels(userId: userID)
+        syncUnreadListeners(for: userID)
         setupChannelsListener(for: userID)
     }
     
@@ -79,7 +96,57 @@ class ChannelsViewModel: ObservableObject {
 
                 self.channels = updatedChannels
                 self.saveCachedChannels(userId: userId, channels: updatedChannels)
+
+                self.syncUnreadListeners(for: userId)
             }
+    }
+
+    private func syncUnreadListeners(for userId: String) {
+        let channelIds = Set(channels.map { $0.id })
+
+        // Remove listeners for channels no longer present
+        for (channelId, l) in messageListeners where !channelIds.contains(channelId) {
+            l.remove()
+            messageListeners.removeValue(forKey: channelId)
+            unreadCounts.removeValue(forKey: channelId)
+        }
+
+        // Add listeners for new channels
+        for channel in channels where messageListeners[channel.id] == nil {
+            let channelId = channel.id
+            let l = db.collection("channels")
+                .document(channelId)
+                .collection("messages")
+                .order(by: "createdAt", descending: true)
+                .limit(to: 100)
+                .addSnapshotListener { [weak self] snapshot, error in
+                    guard let self = self else { return }
+                    if let error = error {
+                        print("❌ Error listening for unread messages: \(error.localizedDescription)")
+                        return
+                    }
+                    guard let docs = snapshot?.documents else {
+                        Task { @MainActor in
+                            self.unreadCounts[channelId] = 0
+                        }
+                        return
+                    }
+
+                    var unread = 0
+                    for doc in docs {
+                        guard let msg = Message.fromDictionary(doc.data(), id: doc.documentID) else { continue }
+                        if msg.authorID == userId { continue }
+                        if msg.readBy.contains(userId) { continue }
+                        unread += 1
+                    }
+
+                    Task { @MainActor in
+                        self.unreadCounts[channelId] = unread
+                    }
+                }
+
+            messageListeners[channelId] = l
+        }
     }
     
     func fetchChannels() async {

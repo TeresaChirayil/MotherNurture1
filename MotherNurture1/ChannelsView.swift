@@ -13,6 +13,8 @@ struct ChannelsView: View {
     @State private var channelToEdit: Channel?
     @State private var showMembers = false
     @State private var selectedChannelForMembers: Channel?
+    @State private var showUnreadBanner = false
+    @State private var lastTotalUnread = 0
     
     private var filteredChannels: [Channel] {
         if searchText.isEmpty {
@@ -34,6 +36,25 @@ struct ChannelsView: View {
                         .ignoresSafeArea()
                     
                     VStack(spacing: 0) {
+                        if showUnreadBanner && viewModel.totalUnread > 0 {
+                            HStack(spacing: 10) {
+                                Image(systemName: "bell.fill")
+                                    .foregroundColor(.white)
+                                Text("\(viewModel.totalUnread) New Message\(viewModel.totalUnread == 1 ? "" : "s")")
+                                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                    .foregroundColor(.white)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(Color(hex: "8B9A7E"))
+                            .cornerRadius(12)
+                            .padding(.horizontal)
+                            .padding(.top, 8)
+                            .padding(.bottom, 6)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                        }
+
                         // Search Bar
                         HStack {
                             Image(systemName: "magnifyingglass")
@@ -89,6 +110,7 @@ struct ChannelsView: View {
                                     ChannelRow(
                                         channel: channel,
                                         currentUserId: userDataManager.profile.userID ?? "",
+                                        unreadCount: viewModel.unreadCounts[channel.id] ?? 0,
                                         onLeave: { leaveChannel(channel) },
                                         onEdit: { editChannel(channel) },
                                         onShowMembers: { showChannelMembers(channel) }
@@ -204,6 +226,26 @@ struct ChannelsView: View {
             .onChange(of: userDataManager.profile.userID) { _, newUserID in
                 viewModel.setUserID(newUserID)
             }
+            .onAppear {
+                lastTotalUnread = viewModel.totalUnread
+            }
+            .onChange(of: viewModel.totalUnread) { _, newTotal in
+                // Only pop the banner when unread increases
+                if newTotal > lastTotalUnread {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
+                        showUnreadBanner = true
+                    }
+                    Task {
+                        try? await Task.sleep(nanoseconds: 3_000_000_000)
+                        await MainActor.run {
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                showUnreadBanner = false
+                            }
+                        }
+                    }
+                }
+                lastTotalUnread = newTotal
+            }
         }
     }
     
@@ -228,6 +270,7 @@ struct ChannelsView: View {
 struct ChannelRow: View {
     let channel: Channel
     let currentUserId: String
+    let unreadCount: Int
     let onLeave: () -> Void
     let onEdit: () -> Void
     let onShowMembers: () -> Void
@@ -331,6 +374,16 @@ struct ChannelRow: View {
                         Text(channel.timeAgo)
                             .font(.caption2)
                             .foregroundColor(Color(hex: "5C3D2E").opacity(0.7))
+                    }
+
+                    if unreadCount > 0 {
+                        Text(unreadCount > 99 ? "99+" : "\(unreadCount)")
+                            .font(.caption2)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, unreadCount > 9 ? 8 : 7)
+                            .padding(.vertical, 4)
+                            .background(Color(hex: "8B9A7E"))
+                            .clipShape(Capsule())
                     }
                     
                     Button(action: onShowMembers) {

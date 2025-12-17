@@ -371,6 +371,8 @@ struct MessagesView: View {
             Task { @MainActor in
                 self.messages = updatedMessages
                 self.isLoading = false
+                // Keep read state up-to-date while viewing the chat
+                self.markMessagesAsRead()
             }
         }
     }
@@ -514,20 +516,23 @@ struct MessagesView: View {
             let messagesRef = db.collection("channels").document(channel.id).collection("messages")
             
             do {
-                // Get all messages not authored by current user that haven't been read by them
+                // Fetch recent messages, then mark any unread messages as read.
+                // (Firestore has limitations around isNotEqualTo without specific ordering)
                 let snapshot = try await messagesRef
-                    .whereField("authorID", isNotEqualTo: userId)
+                    .order(by: "createdAt", descending: true)
+                    .limit(to: 100)
                     .getDocuments()
-                
+
                 for doc in snapshot.documents {
                     let data = doc.data()
+                    let authorId = data["authorID"] as? String ?? ""
+                    if authorId == userId { continue }
+
                     var readBy = data["readBy"] as? [String] ?? []
-                    
-                    // Only update if user hasn't already read this message
-                    if !readBy.contains(userId) {
-                        readBy.append(userId)
-                        try await doc.reference.updateData(["readBy": readBy])
-                    }
+                    if readBy.contains(userId) { continue }
+
+                    readBy.append(userId)
+                    try await doc.reference.updateData(["readBy": readBy])
                 }
             } catch {
                 print("⚠️ Error marking messages as read: \(error.localizedDescription)")

@@ -75,4 +75,12 @@ struct MailHelper {
         body += "\n\nPlease provide details about why you are reporting this content:"
         openMailApp(subject: subject, body: body, contentType: "Message/Channel", contentID: channelID)
     }
+    
+    /// Opens mail app to report a comment
+    static func reportComment(commentID: String, postID: String, commentContent: String, authorName: String) {
+        let subject = "Report Comment by \(authorName)"
+        let truncatedContent = commentContent.count > 100 ? String(commentContent.prefix(100)) + "..." : commentContent
+        let body = "I would like to report the following comment:\n\nComment: \"\(truncatedContent)\"\nAuthor: \(authorName)\nComment ID: \(commentID)\nPost ID: \(postID)\n\nPlease provide details about why you are reporting this comment:"
+        openMailApp(subject: subject, body: body, contentType: "Comment", contentID: commentID)
+    }
 }

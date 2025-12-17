@@ -33,6 +33,26 @@ struct PostDetailView: View {
         self.post = post
         _currentPost = State(initialValue: post)
     }
+
+    private func contentWithoutTitle(_ post: ForumPost) -> String {
+        let title = post.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let content = post.content.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if content.caseInsensitiveCompare(title) == .orderedSame {
+            return ""
+        }
+
+        let lines = content.components(separatedBy: .newlines)
+        if let firstNonEmptyIndex = lines.firstIndex(where: { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
+            let firstLine = lines[firstNonEmptyIndex].trimmingCharacters(in: .whitespacesAndNewlines)
+            if firstLine.caseInsensitiveCompare(title) == .orderedSame {
+                let remaining = lines.dropFirst(firstNonEmptyIndex + 1).joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+                return remaining
+            }
+        }
+
+        return content
+    }
     
     var body: some View {
         NavigationStack {
@@ -137,10 +157,14 @@ struct PostDetailView: View {
             Text(currentPost.authorName)
                 .font(.system(size: 14, design: .rounded))
                 .foregroundColor(Color(hex: "8B9A7E"))
-            Text(currentPost.content)
-                .font(.system(size: 16, design: .rounded))
-                .foregroundColor(Color(hex: "5C3D2E"))
-                .padding(.top, 4)
+
+            let displayContent = contentWithoutTitle(currentPost)
+            if !displayContent.isEmpty {
+                Text(displayContent)
+                    .font(.system(size: 16, design: .rounded))
+                    .foregroundColor(Color(hex: "5C3D2E"))
+                    .padding(.top, 4)
+            }
             
             if let tags = currentPost.tags, !tags.isEmpty {
                 HStack(spacing: 8) {
@@ -203,13 +227,18 @@ struct PostDetailView: View {
                     CommentRowView(
                         comment: comment,
                         canDelete: canDeleteComment(comment),
-                        canBlock: !canDeleteComment(comment) && (userDataManager.profile.userID != nil && comment.authorID != userDataManager.profile.userID)
-                    ) {
-                        Task { await deleteComment(comment) }
-                    } onBlock: {
-                        userToBlock = comment.authorID
-                        showBlockUserConfirmation = true
-                    }
+                        canBlock: !canDeleteComment(comment) && (userDataManager.profile.userID != nil && comment.authorID != userDataManager.profile.userID),
+                        onDelete: {
+                            Task { await deleteComment(comment) }
+                        },
+                        onBlock: {
+                            userToBlock = comment.authorID
+                            showBlockUserConfirmation = true
+                        },
+                        onReport: {
+                            reportComment(comment)
+                        }
+                    )
                 }
             }
         }
@@ -444,6 +473,13 @@ struct PostDetailView: View {
         
         // Open mail app with pre-filled report email
         MailHelper.reportPost(postID: postID, postTitle: currentPost.title, authorName: currentPost.authorName)
+    }
+    
+    // MARK: - Report Comment
+    private func reportComment(_ comment: Comment) {
+        let commentID = comment.id ?? "unknown"
+        let postID = currentPost.id ?? "unknown"
+        MailHelper.reportComment(commentID: commentID, postID: postID, commentContent: comment.content, authorName: comment.authorName)
     }
     
     // MARK: - Block User
