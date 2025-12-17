@@ -99,7 +99,7 @@ class FirebaseService {
         print("   Profile userID: \(profile.userID ?? "nil")")
         print("   Profile email: \(profile.email ?? "nil")")
         
-        // Get the authenticated user ID - this is the source of truth
+        // Require an authenticated user for Firestore access.
         guard let authUserID = Auth.auth().currentUser?.uid else {
             let error = NSError(
                 domain: "FirebaseService",
@@ -112,9 +112,14 @@ class FirebaseService {
         
         print("   Current Auth user: \(authUserID)")
         
-        // Always use the authenticated user's ID as the document ID
-        // This ensures consistency and allows security rules to work properly
-        let userID = authUserID
+        // Use the existing profile userID if present (stable identity used across channels/messages).
+        // Fallback to Auth UID only when profile.userID is missing.
+        let userID: String
+        if let existingProfileID = profile.userID, !existingProfileID.isEmpty {
+            userID = existingProfileID
+        } else {
+            userID = authUserID
+        }
         
         var profileDict = profile.toDictionary()
         profileDict["updatedAt"] = Timestamp(date: Date())
@@ -241,6 +246,16 @@ class FirebaseService {
         
         guard let doc = snapshot.documents.first else { return nil }
         return parseUserProfile(from: doc.data(), userID: doc.documentID)
+    }
+
+    func getUserProfilesByEmail(email: String) async throws -> [UserProfile] {
+        let snapshot = try await db.collection("users")
+            .whereField("email", isEqualTo: email)
+            .getDocuments()
+
+        return snapshot.documents.map { doc in
+            parseUserProfile(from: doc.data(), userID: doc.documentID)
+        }
     }
     
     // -----------------------------------------------------

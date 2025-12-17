@@ -23,6 +23,7 @@ struct PostDetailView: View {
     @State private var showError: Bool = false
     @State private var errorMessage: String = ""
     @State private var commentAnonymously: Bool = false
+    @State private var replyingTo: Comment? = nil
     
     @State private var showDeletePostConfirmation: Bool = false
     @State private var showReportPostConfirmation: Bool = false
@@ -223,7 +224,10 @@ struct PostDetailView: View {
                     .frame(maxWidth: .infinity)
                     .padding()
             } else {
-                ForEach(comments) { comment in
+                let topLevel = comments.filter { ($0.parentCommentID ?? "").isEmpty }
+                let repliesByParent = Dictionary(grouping: comments.filter { !($0.parentCommentID ?? "").isEmpty }) { $0.parentCommentID ?? "" }
+
+                ForEach(topLevel) { comment in
                     CommentRowView(
                         comment: comment,
                         canDelete: canDeleteComment(comment),
@@ -237,8 +241,35 @@ struct PostDetailView: View {
                         },
                         onReport: {
                             reportComment(comment)
+                        },
+                        onReply: {
+                            replyingTo = comment
                         }
                     )
+
+                    if let parentId = comment.id, let replies = repliesByParent[parentId], !replies.isEmpty {
+                        ForEach(replies) { reply in
+                            CommentRowView(
+                                comment: reply,
+                                canDelete: canDeleteComment(reply),
+                                canBlock: !canDeleteComment(reply) && (userDataManager.profile.userID != nil && reply.authorID != userDataManager.profile.userID),
+                                onDelete: {
+                                    Task { await deleteComment(reply) }
+                                },
+                                onBlock: {
+                                    userToBlock = reply.authorID
+                                    showBlockUserConfirmation = true
+                                },
+                                onReport: {
+                                    reportComment(reply)
+                                },
+                                onReply: {
+                                    replyingTo = comment
+                                }
+                            )
+                            .padding(.leading, 28)
+                        }
+                    }
                 }
             }
         }
@@ -250,6 +281,24 @@ struct PostDetailView: View {
             Text("Add a comment")
                 .font(.system(size: 16, weight: .semibold, design: .rounded))
                 .foregroundColor(Color(hex: "5C3D2E"))
+
+            if let replyingTo = replyingTo {
+                HStack(spacing: 8) {
+                    Text("Replying to \(replyingTo.authorName)")
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .foregroundColor(Color(hex: "5C3D2E"))
+                    Spacer()
+                    Button(action: { self.replyingTo = nil }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(Color(hex: "5C3D2E").opacity(0.5))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color(hex: "E8E1D7"))
+                .cornerRadius(10)
+            }
             
             HStack(spacing: 12) {
                 TextField("Write a comment...", text: $newComment, axis: .vertical)
@@ -363,6 +412,7 @@ struct PostDetailView: View {
         
         let comment = Comment(
             postID: postID,
+            parentCommentID: replyingTo?.id,
             content: trimmedContent,
             authorID: userID,
             authorName: displayName
@@ -375,6 +425,7 @@ struct PostDetailView: View {
                 await MainActor.run {
                     self.newComment = ""
                     self.commentAnonymously = false
+                    self.replyingTo = nil
                     self.isPostingComment = false
                 }
                 await loadComments()

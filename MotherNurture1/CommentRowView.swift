@@ -8,17 +8,19 @@ struct CommentRowView: View {
     let onDelete: () -> Void
     let onBlock: (() -> Void)?
     let onReport: (() -> Void)?
+    let onReply: (() -> Void)?
     
     @State private var showDeleteConfirmation = false
     @State private var showReportConfirmation = false
     
-    init(comment: Comment, canDelete: Bool, canBlock: Bool, onDelete: @escaping () -> Void, onBlock: (() -> Void)?, onReport: (() -> Void)? = nil) {
+    init(comment: Comment, canDelete: Bool, canBlock: Bool, onDelete: @escaping () -> Void, onBlock: (() -> Void)?, onReport: (() -> Void)? = nil, onReply: (() -> Void)? = nil) {
         self.comment = comment
         self.canDelete = canDelete
         self.canBlock = canBlock
         self.onDelete = onDelete
         self.onBlock = onBlock
         self.onReport = onReport
+        self.onReply = onReply
     }
 
     var body: some View {
@@ -77,6 +79,16 @@ struct CommentRowView: View {
                     .font(.system(size: 15, design: .rounded))
                     .foregroundColor(Color(hex: "5C3D2E").opacity(0.85))
                     .fixedSize(horizontal: false, vertical: true)
+
+                if let onReply = onReply {
+                    Button(action: onReply) {
+                        Text("Reply")
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .foregroundColor(Color(hex: "8B9A7E"))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 2)
+                }
             }
         }
         .padding(14)

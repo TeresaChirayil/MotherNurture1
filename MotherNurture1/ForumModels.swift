@@ -83,15 +83,17 @@ struct ForumPost: Identifiable {
 struct Comment: Identifiable {
     var id: String?
     var postID: String
+    var parentCommentID: String?
     var content: String
     var authorID: String
     var authorName: String
     var createdAt: Timestamp
     var updatedAt: Timestamp
     
-    init(id: String? = nil, postID: String, content: String, authorID: String, authorName: String) {
+    init(id: String? = nil, postID: String, parentCommentID: String? = nil, content: String, authorID: String, authorName: String) {
         self.id = id
         self.postID = postID
+        self.parentCommentID = parentCommentID
         self.content = content
         self.authorID = authorID
         self.authorName = authorName
@@ -100,7 +102,7 @@ struct Comment: Identifiable {
     }
     
     func toDictionary() -> [String: Any] {
-        return [
+        var dict: [String: Any] = [
             "postID": postID,
             "content": content,
             "authorID": authorID,
@@ -108,6 +110,12 @@ struct Comment: Identifiable {
             "createdAt": createdAt,
             "updatedAt": updatedAt
         ]
+
+        if let parentCommentID = parentCommentID {
+            dict["parentCommentID"] = parentCommentID
+        }
+
+        return dict
     }
     
     static func fromDictionary(_ data: [String: Any], id: String) -> Comment? {
@@ -119,10 +127,13 @@ struct Comment: Identifiable {
               let updatedAt = data["updatedAt"] as? Timestamp else {
             return nil
         }
+
+        let parentCommentID = data["parentCommentID"] as? String
         
         var comment = Comment(
             id: id,
             postID: postID,
+            parentCommentID: parentCommentID,
             content: content,
             authorID: authorID,
             authorName: authorName

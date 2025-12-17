@@ -532,7 +532,7 @@ struct ProfileView: View {
                     userDataManager.profile.photoURL = downloadURL.absoluteString
                 }
                 // Save to Firebase
-                try await userDataManager.saveToFirebase()
+                try await userDataManager.saveToFirebase(performChannelAssignment: false)
                 await MainActor.run {
                     // Clear selectedImage after successful save so photoURL persists
                     selectedImage = nil

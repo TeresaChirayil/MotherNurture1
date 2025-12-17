@@ -31,12 +31,14 @@ class UserDataManager: ObservableObject {
     
     private func checkAuthStatus() {
         if let currentUser = Auth.auth().currentUser {
-            self.profile.userID = currentUser.uid
+            if self.profile.userID == nil || self.profile.userID?.isEmpty == true {
+                self.profile.userID = currentUser.uid
+            }
             self.isAuthenticated = true
         }
     }
     
-    func saveToFirebase(setAuthenticated: Bool = true) async throws {
+    func saveToFirebase(setAuthenticated: Bool = true, performChannelAssignment: Bool = true) async throws {
         print("📝 Starting saveToFirebase...")
         print("Profile email: \(profile.email ?? "nil")")
         print("Profile userID: \(profile.userID ?? "nil")")
@@ -68,9 +70,17 @@ class UserDataManager: ObservableObject {
             }
         }
         
-        // Set the userID in the profile
-        profile.userID = userID
-        print("📝 Profile userID set to: \(userID)")
+        // IMPORTANT:
+        // - `userID` here is the Firebase Auth UID (often anonymous).
+        // - For existing accounts loaded from Firestore, `profile.userID` is the stable identity used throughout the app
+        //   (channels memberIds, messages readBy, etc.).
+        // - Do NOT overwrite an existing `profile.userID` with a new anonymous UID, or it will look like a new user.
+        if let existingProfileID = profile.userID, !existingProfileID.isEmpty {
+            print("📝 Keeping existing profile.userID: \(existingProfileID) (Auth UID: \(userID))")
+        } else {
+            profile.userID = userID
+            print("📝 Profile userID set to: \(userID)")
+        }
         
         // Verify we have required data
         guard profile.email != nil && !profile.email!.isEmpty else {
@@ -83,9 +93,11 @@ class UserDataManager: ObservableObject {
             throw error
         }
         
-        // Assign channels based on questionnaire responses
-        profile.assignChannels()
-        print("📝 Channels assigned: \(profile.channelMemberships ?? [])")
+        if performChannelAssignment {
+            // Assign channels based on questionnaire responses
+            profile.assignChannels()
+            print("📝 Channels assigned: \(profile.channelMemberships ?? [])")
+        }
         
         // Save or update the profile in Firebase
         print("💾 Saving profile to Firebase...")
@@ -103,26 +115,28 @@ class UserDataManager: ObservableObject {
                 }
             }
             
-            // Add user to their assigned channels in Firebase
-            if let channelMemberships = profile.channelMemberships {
-                print("📝 Adding user to \(channelMemberships.count) channels...")
-                for channelName in channelMemberships {
-                    do {
-                        try await firebaseService.addUserToChannel(userID: savedUserID, channelName: channelName)
-                        print("✅ Added to channel: \(channelName)")
-                    } catch {
-                        print("⚠️ Error adding user to channel \(channelName): \(error)")
-                        // Continue with other channels even if one fails
+            if performChannelAssignment {
+                // Add user to their assigned channels in Firebase
+                if let channelMemberships = profile.channelMemberships {
+                    print("📝 Adding user to \(channelMemberships.count) channels...")
+                    for channelName in channelMemberships {
+                        do {
+                            try await firebaseService.addUserToChannel(userID: savedUserID, channelName: channelName)
+                            print("✅ Added to channel: \(channelName)")
+                        } catch {
+                            print("⚠️ Error adding user to channel \(channelName): \(error)")
+                            // Continue with other channels even if one fails
+                        }
                     }
                 }
-            }
-            
-            // Auto-join the welcome channel "Get to Know Each Other!"
-            do {
-                try await firebaseService.joinWelcomeChannel(userID: savedUserID)
-                print("✅ Joined welcome channel")
-            } catch {
-                print("⚠️ Error joining welcome channel: \(error)")
+                
+                // Auto-join the welcome channel "Get to Know Each Other!"
+                do {
+                    try await firebaseService.joinWelcomeChannel(userID: savedUserID)
+                    print("✅ Joined welcome channel")
+                } catch {
+                    print("⚠️ Error joining welcome channel: \(error)")
+                }
             }
         } catch {
             print("❌ Error saving profile to Firebase: \(error)")
@@ -177,8 +191,43 @@ class UserDataManager: ObservableObject {
                 loadedProfile = try await firebaseService.getUserProfile(userID: userID)
             } else if let email = email {
                 // Load by email if explicitly provided
-                print("🔍 Loading profile by email: \(email)")
-                loadedProfile = try await firebaseService.getUserProfileByEmail(email: email)
+                // IMPORTANT: email may not be unique in the DB (legacy). Fetch all and pick by password.
+                let normalizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                print("🔍 Loading profile by email: \(normalizedEmail)")
+
+                let candidates = try await firebaseService.getUserProfilesByEmail(email: normalizedEmail)
+                if candidates.isEmpty {
+                    loadedProfile = nil
+                } else if let password = password {
+                    // Prefer exact passwordHash match
+                    let hashedMatches = candidates.filter { $0.passwordHash != nil && $0.verifyPassword(password) }
+                    if hashedMatches.count == 1 {
+                        loadedProfile = hashedMatches[0]
+                    } else if hashedMatches.isEmpty {
+                        // Legacy user without password hash: only allow if it's the ONLY account for that email.
+                        let legacy = candidates.filter { $0.passwordHash == nil }
+                        if legacy.count == 1 && candidates.count == 1 {
+                            loadedProfile = legacy[0]
+                        } else if candidates.count > 1 {
+                            throw NSError(
+                                domain: "UserDataManager",
+                                code: -1,
+                                userInfo: [NSLocalizedDescriptionKey: "Multiple accounts were found for this email. For safety, login is blocked. Please contact support or reset the password for the correct account."]
+                            )
+                        } else {
+                            loadedProfile = candidates[0]
+                        }
+                    } else {
+                        throw NSError(
+                            domain: "UserDataManager",
+                            code: -1,
+                            userInfo: [NSLocalizedDescriptionKey: "Multiple accounts match this email/password combination. For safety, login is blocked. Please contact support."]
+                        )
+                    }
+                } else {
+                    // No password provided; fall back to legacy behavior
+                    loadedProfile = candidates.count == 1 ? candidates[0] : nil
+                }
             } else if let storedUserID = profile.userID {
                 // Fall back to stored userID
                 print("🔍 Loading profile by stored userID: \(storedUserID)")
@@ -186,7 +235,9 @@ class UserDataManager: ObservableObject {
             } else if let storedEmail = profile.email {
                 // Fall back to stored email
                 print("🔍 Loading profile by stored email: \(storedEmail)")
-                loadedProfile = try await firebaseService.getUserProfileByEmail(email: storedEmail)
+                let normalizedEmail = storedEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                let candidates = try await firebaseService.getUserProfilesByEmail(email: normalizedEmail)
+                loadedProfile = candidates.count == 1 ? candidates[0] : nil
             } else {
                 throw NSError(
                     domain: "UserDataManager",
@@ -239,16 +290,16 @@ class UserDataManager: ObservableObject {
                     }
                     print("✅ Password verified")
                 } else {
-                    // Legacy user without password - allow login and try to set their password
-                    print("⚠️ Legacy user without password hash - allowing login")
-                    // Try to save password hash but don't fail login if it doesn't work
+                    // Legacy user without password
+                    // Only allow if this email uniquely maps to this one profile (handled above).
+                    print("⚠️ Legacy user without password hash - setting password hash")
                     if let userID = loadedProfile.userID {
+                        let newHash = UserProfile.hashPassword(password)
                         do {
-                            let newHash = UserProfile.hashPassword(password)
                             try await firebaseService.updateUserProfile(userID: userID, data: ["passwordHash": newHash])
                             print("✅ Password hash saved for legacy user")
                         } catch {
-                            print("⚠️ Could not save password hash (will try again later): \(error.localizedDescription)")
+                            print("⚠️ Could not save password hash: \(error.localizedDescription)")
                         }
                     }
                 }

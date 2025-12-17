@@ -229,8 +229,13 @@ struct ContentView: View {
                     _ = try await FirebaseService.shared.signInAnonymously()
                 }
                 
+                let candidates = try await FirebaseService.shared.getUserProfilesByEmail(email: trimmedEmail)
+                if candidates.count > 1 {
+                    throw NSError(domain: "ContentView", code: -1, userInfo: [NSLocalizedDescriptionKey: "Multiple accounts were found for this email. Password reset is blocked to prevent changing the wrong account."])
+                }
+
                 // Find the user by email
-                if let profile = try await FirebaseService.shared.getUserProfileByEmail(email: trimmedEmail) {
+                if let profile = candidates.first {
                     guard let userID = profile.userID else {
                         throw NSError(domain: "ContentView", code: -1, userInfo: [NSLocalizedDescriptionKey: "User ID not found"])
                     }
